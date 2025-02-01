@@ -4,12 +4,27 @@ const multer = require("multer");
 const pdfParse = require("pdf-parse");
 const { exec } = require("child_process");
 const fs = require("fs");
+const morgan = require("morgan");
+const helmet = require("helmet");
+const path = require("path");
+require("dotenv").config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(morgan("combined"));
+app.use(helmet());
 
-const upload = multer({ dest: "uploads/" });
+const upload = multer({
+  dest: "uploads/",
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype !== "application/pdf") {
+      return cb(new Error("Only PDFs are allowed"), false);
+    }
+    cb(null, true);
+  },
+});
 
 // 📝 Upload and extract text from PDF
 app.post("/upload", upload.single("pdf"), async (req, res) => {
