@@ -12,40 +12,50 @@ router.get('/', (req, res, next) => {
     return res.status(400).json({ error: 'No text provided' });
   }
 
-  // Split the text into words (removing extra whitespace).
-  const words = text.split(/\s+/).filter(Boolean);
+  // Split the text into paragraphs by looking for one or more blank lines.
+  const paragraphs = text.split(/\n\s*\n/).filter(Boolean);
   let index = 0;
   const selectedVoice = voice || 'Karen'; // Default voice if none specified
+  const wpm = 300; // Speaking rate
 
   // Set headers for Server-Sent Events (SSE)
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  // Function to speak the next word and send a highlight update.
-  const speakNextWord = () => {
-    if (index >= words.length) {
+  // Function to speak a paragraph and chain to the next when finished.
+  const speakNextParagraph = () => {
+    if (index >= paragraphs.length) {
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       return res.end();
     }
 
-    const word = words[index];
-    const command = `say -v ${selectedVoice} -r 300 "${word}"`; // 300 WPM speed
+    const paragraph = paragraphs[index];
 
+    // Immediately send an update to highlight the current paragraph.
+    res.write(
+      `data: ${JSON.stringify({ paragraph, index: index + 1 })}\n\n`
+    );
+
+    // Escape double quotes to avoid shell issues.
+    const sanitizedParagraph = paragraph.replace(/"/g, '\\"');
+
+    // Construct the say command. Note that exec waits until the command finishes.
+    const command = `say -v ${selectedVoice} -r ${wpm} "${sanitizedParagraph}"`;
+
+    // Execute the command and only once it completes, move on to the next paragraph.
     exec(command, (err) => {
       if (err) {
         console.error('Error with say command:', err);
-        // Optionally, you can write an error message back to the client
+        // Optionally, you can send an error update here.
       }
-      // Send update about the current word and its position.
-      res.write(`data: ${JSON.stringify({ word, index: index + 1 })}\n\n`);
       index++;
-      // Use a delay to allow for smooth word highlighting. Adjust this value as needed.
-      setTimeout(speakNextWord, 300);
+      // Call recursively only after the current paragraph is fully spoken.
+      speakNextParagraph();
     });
   };
 
-  speakNextWord();
+  speakNextParagraph();
 });
 
 module.exports = router;
