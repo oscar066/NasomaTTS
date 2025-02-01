@@ -5,9 +5,9 @@ const { exec } = require('child_process');
 
 const router = express.Router();
 
-// POST /api/speak
-router.post('/', (req, res, next) => {
-  const { text, voice } = req.body;
+// GET /api/speak
+router.get('/', (req, res, next) => {
+  const { text, voice } = req.query;
   if (!text) {
     return res.status(400).json({ error: 'No text provided' });
   }
@@ -35,12 +35,12 @@ router.post('/', (req, res, next) => {
     exec(command, (err) => {
       if (err) {
         console.error('Error with say command:', err);
-        // You may choose to notify the client or log the error.
+        // Optionally, you can write an error message back to the client
       }
       // Send update about the current word and its position.
       res.write(`data: ${JSON.stringify({ word, index: index + 1 })}\n\n`);
       index++;
-      // Use a delay to allow for smooth word highlighting. You can fine-tune this value.
+      // Use a delay to allow for smooth word highlighting. Adjust this value as needed.
       setTimeout(speakNextWord, 300);
     });
   };
