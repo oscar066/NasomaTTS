@@ -60,17 +60,41 @@ body {
   overflow-y: auto;
 }
 
-.paragraph {
+.paragraph-wrapper {
+  position: relative;
   margin: 15px 0;
   padding: 10px;
   line-height: 1.6;
+}
+
+.paragraph-wrapper.active {
+  background-color: #cdecff;
+  border-radius: 5px;
   transition: background-color 0.3s ease;
 }
 
-.highlight {
-  background-color: #fff3cd;
+.paragraph {
+  margin: 0;
 }
 
+/* Updated styling for the sliding word window overlay */
+.word-overlay {
+  margin-top: 10px;
+  font-size: 1.1em;
+  color: #333;
+  background: #e9ecef;
+  padding: 5px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+/* Style for the currently highlighted word */
+.word-overlay .highlight {
+  background-color: yellow;
+  font-weight: bold;
+}
+
+/* Controls styling */
 .controls {
   margin-top: 20px;
   display: flex;
