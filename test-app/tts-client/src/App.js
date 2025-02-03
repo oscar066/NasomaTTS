@@ -7,16 +7,19 @@ function App() {
   const [text, setText] = useState("");
   const [paragraphs, setParagraphs] = useState([]);
   const [currentParagraphIndex, setCurrentParagraphIndex] = useState(-1);
+  const [currentWordIndex, setCurrentWordIndex] = useState(-1);
+  const [wordWindow, setWordWindow] = useState([]); // sliding window of words
+  const [windowStart, setWindowStart] = useState(0); // starting index of the wordWindow
   const [voice, setVoice] = useState("");
   const [voices, setVoices] = useState([]);
 
-  // Fetch available voices on component mount
+  // Fetch available voices from the server on mount.
   useEffect(() => {
     axios
       .get("http://localhost:5000/api/voices")
       .then((response) => {
         setVoices(response.data.voices);
-        setVoice("Karen"); // Default voice set to Karen
+        setVoice("Karen"); // Default voice
       })
       .catch((error) => {
         console.error("Error fetching voices:", error);
@@ -28,10 +31,8 @@ function App() {
   };
 
   const handleUpload = async () => {
-    if (!file) {
-      alert("Please select a PDF file");
-      return;
-    }
+    if (!file) return alert("Please select a PDF file");
+
     const formData = new FormData();
     formData.append("pdf", file);
 
@@ -42,7 +43,7 @@ function App() {
         { headers: { "Content-Type": "multipart/form-data" } }
       );
       setText(response.data.text);
-      // Split text into paragraphs using one or more blank lines as the delimiter
+      // Split text into paragraphs using blank lines.
       setParagraphs(response.data.text.split(/\n\s*\n/).filter(Boolean));
     } catch (error) {
       console.error("Error extracting text from PDF:", error);
@@ -51,25 +52,41 @@ function App() {
   };
 
   const handleSpeak = () => {
-    if (!text.trim()) {
-      alert("No text available for speech");
-      return;
-    }
-    // Build the URL with query parameters for text and voice
+    if (!text.trim()) return alert("No text available for speech");
+
+    // Build the SSE URL with query parameters.
     const url = `http://localhost:5000/api/speak?voice=${encodeURIComponent(
       voice
     )}&text=${encodeURIComponent(text)}`;
-
     const eventSource = new EventSource(url);
 
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+
+        // When done, reset states and close connection.
         if (data.done) {
-          setCurrentParagraphIndex(-1); // Reset highlight when done
+          setCurrentParagraphIndex(-1);
+          setCurrentWordIndex(-1);
+          setWordWindow([]);
+          setWindowStart(0);
           eventSource.close();
-        } else {
-          setCurrentParagraphIndex(data.index - 1); // Use 0-indexed position
+          return;
+        }
+
+        // New paragraph event.
+        if (data.newParagraph) {
+          setCurrentParagraphIndex(data.paragraphIndex);
+          setCurrentWordIndex(-1);
+          setWordWindow([]);
+          setWindowStart(0);
+        }
+
+        // Update sliding window & word index when provided.
+        if (data.wordWindow) {
+          setWordWindow(data.wordWindow);
+          setWindowStart(data.windowStart);
+          setCurrentWordIndex(data.currentWordIndex);
         }
       } catch (err) {
         console.error("Error parsing SSE data:", err);
@@ -84,7 +101,7 @@ function App() {
 
   return (
     <div className="container">
-      <h2 className="title">📖 PDF Text-to-Speech with Paragraph Highlighting 🎤</h2>
+      <h2 className="title">📖 PDF Text-to-Speech 🎤</h2>
 
       <div className="upload-section">
         <input
@@ -102,14 +119,35 @@ function App() {
         <>
           <div className="text-display">
             {paragraphs.map((para, index) => (
-              <p
+              <div
                 key={index}
-                className={`paragraph ${
-                  index === currentParagraphIndex ? "highlight" : ""
+                className={`paragraph-wrapper ${
+                  index === currentParagraphIndex ? "active" : ""
                 }`}
               >
-                {para}
-              </p>
+                <p className="paragraph">{para}</p>
+                {/* Display sliding word window overlay for active paragraph */}
+                {index === currentParagraphIndex && wordWindow.length > 0 && (
+                  <div className="word-overlay">
+                    {wordWindow.map((word, i) => {
+                      // Calculate the global index for this word.
+                      const globalIndex = windowStart + i;
+                      return (
+                        <span
+                          key={i}
+                          className={
+                            globalIndex === currentWordIndex
+                              ? "highlight"
+                              : ""
+                          }
+                        >
+                          {word}{" "}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 
