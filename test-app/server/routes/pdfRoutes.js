@@ -21,18 +21,25 @@ const upload = multer({
 });
 
 // POST /api/pdf/upload
+
 router.post("/upload", upload.single("pdf"), async (req, res, next) => {
   if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded" });
+    return res.status(400).json(
+      { error: "No file uploaded" }
+    );
   }
+
   try {
     const dataBuffer = fs.readFileSync(req.file.path);
     const pdfData = await pdfParse(dataBuffer);
+
     // Clean up the file after processing
     fs.unlink(req.file.path, (err) => {
       if (err) console.error("Error deleting file:", err);
     });
+
     res.json({ text: pdfData.text });
+
   } catch (error) {
     next(new Error("Error extracting text from PDF"));
   }

@@ -24,7 +24,7 @@ router.get("/", (req, res) => {
 
   // Define sliding window parameters (for highlighting words).
   // Adjust to show more/less words in the sliding window.
-  const windowSize = 3;
+  const windowSize = 5;
 
   // Set up Server-Sent Events (SSE) headers.
   res.setHeader("Content-Type", "text/event-stream");
