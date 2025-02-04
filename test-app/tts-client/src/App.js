@@ -8,8 +8,8 @@ function App() {
   const [paragraphs, setParagraphs] = useState([]);
   const [currentParagraphIndex, setCurrentParagraphIndex] = useState(-1);
   const [currentWordIndex, setCurrentWordIndex] = useState(-1);
-  const [wordWindow, setWordWindow] = useState([]); // sliding window of words
-  const [windowStart, setWindowStart] = useState(0); // starting index of the wordWindow
+  const [wordWindow, setWordWindow] = useState([]);
+  const [windowStart, setWindowStart] = useState(0);
   const [voice, setVoice] = useState("");
   const [voices, setVoices] = useState([]);
 
@@ -136,9 +136,7 @@ function App() {
                         <span
                           key={i}
                           className={
-                            globalIndex === currentWordIndex
-                              ? "highlight"
-                              : ""
+                            globalIndex === currentWordIndex ? "highlight" : ""
                           }
                         >
                           {word}{" "}
