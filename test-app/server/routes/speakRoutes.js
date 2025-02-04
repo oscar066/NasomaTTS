@@ -1,13 +1,13 @@
 // routes/speakRoutes.js
-const express = require('express');
-const { execFile } = require('child_process');
+const express = require("express");
+const { execFile } = require("child_process");
 
 const router = express.Router();
 
-router.get('/', (req, res) => {
+router.get("/", (req, res) => {
   const { text, voice } = req.query;
   if (!text) {
-    return res.status(400).json({ error: 'No text provided' });
+    return res.status(400).json({ error: "No text provided" });
   }
 
   // Split the input text into paragraphs using one or more blank lines.
@@ -15,7 +15,7 @@ router.get('/', (req, res) => {
   let paragraphIndex = 0;
 
   // Use the provided voice or fall back to a default.
-  const selectedVoice = voice || 'Karen';
+  const selectedVoice = voice || "Karen";
 
   // Speaking settings.
   const wpm = 300;
@@ -27,13 +27,13 @@ router.get('/', (req, res) => {
   const windowSize = 3;
 
   // Set up Server-Sent Events (SSE) headers.
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
 
   // Listen for client disconnect.
   let clientConnected = true;
-  req.on('close', () => {
+  req.on("close", () => {
     clientConnected = false;
   });
 
@@ -46,7 +46,12 @@ router.get('/', (req, res) => {
    * @param {boolean} isNewParagraph - Whether this is the start of a new paragraph.
    */
 
-  const sendProgress = (pIndex, words, currentWordIndex, isNewParagraph = false) => {
+  const sendProgress = (
+    pIndex,
+    words,
+    currentWordIndex,
+    isNewParagraph = false
+  ) => {
     // Calculate a sliding window range.
     const halfWindow = Math.floor(windowSize / 2);
     const windowStart = Math.max(0, currentWordIndex - halfWindow);
@@ -59,7 +64,7 @@ router.get('/', (req, res) => {
         currentWordIndex,
         wordWindow,
         windowStart,
-        fullParagraph: words.join(' '),
+        fullParagraph: words.join(" "),
         newParagraph: isNewParagraph,
       })}\n\n`
     );
@@ -105,16 +110,24 @@ router.get('/', (req, res) => {
     // Use execFile to invoke the OS TTS command safely.
     // Note: The paragraph is passed directly to the command; if your content may include problematic characters,
     // additional sanitization might be needed.
-    execFile('say', ['-v', selectedVoice, '-r', wpm.toString(), paragraph], (err) => {
-      if (err) {
-        console.error('Error executing say command:', err);
-        res.write(`data: ${JSON.stringify({ error: 'Error executing say command' })}\n\n`);
+    execFile(
+      "say",
+      ["-v", selectedVoice, "-r", wpm.toString(), paragraph],
+      (err) => {
+        if (err) {
+          console.error("Error executing say command:", err);
+          res.write(
+            `data: ${JSON.stringify({
+              error: "Error executing say command",
+            })}\n\n`
+          );
+        }
+        // Ensure the timer is cleared.
+        clearInterval(wordTimer);
+        paragraphIndex++;
+        speakNextParagraph();
       }
-      // Ensure the timer is cleared.
-      clearInterval(wordTimer);
-      paragraphIndex++;
-      speakNextParagraph();
-    });
+    );
   };
 
   // Begin processing the paragraphs.
