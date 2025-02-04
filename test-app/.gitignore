@@ -1,7 +1,0 @@
-# ignore the node modules 
-node_modules/
-
-# ignore environment variables 
-.env
-server/.env
-
