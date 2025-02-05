@@ -2,12 +2,13 @@
 
 import React from 'react';
 
-import Dashboard from './components/Dashboard/dashboard'
+// import Dashboard from "./components/Dashboard/Dashboard";
+import DocumentReader from "./components/TTS/DocumentReader";
 
 const HomePage: React.FC = () => {
   return (
     <div className='pt-8'> 
-      <Dashboard />
+      <DocumentReader />
     </div>
   );
 };
