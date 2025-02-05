@@ -11,4 +11,4 @@ const BlogPage: React.FC = () => {
     );
   };
   
-  export default BlogPage;
+export default ChatPDFDashboard;
