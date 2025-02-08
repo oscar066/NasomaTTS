@@ -1,13 +1,10 @@
-const Query = require('./query');
-const Mutation = require('./mutation');
-const Document = require('./document');
-const User = require('./user');
-const { GraphQLDateTime } = require('graphql-iso-date');
+// const { GraphQLUpload } = require('graphql-upload');
+// const GraphQLUpload = require('graphql-upload/GraphQLUpload.js');
+const Query = require("./query");
+const Mutation = require("./mutation");
 
 module.exports = {
-    Query,
-    Mutation,
-    Document,
-    User,
-    DateTime: GraphQLDateTime
+  // Upload: GraphQLUpload,
+  Query,
+  Mutation,
 };
