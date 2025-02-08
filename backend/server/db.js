@@ -1,28 +1,27 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
+require('dotenv').config();
+
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log('MongoDB connected');
+  } catch (err) {
+    console.error(err.message);
+    console.log('MongoDB connection error. Please make sure MongoDB is running.');
+    process.exit(1);
+  }
+};
+
+const closeDB = async () => {
+  try {
+    await mongoose.connection.close();
+    console.log('MongoDB connection closed');
+  } catch (err) {
+    console.error('Error closing MongoDB connection:', err.message);
+  }
+};
 
 module.exports = {
-  connect: (DB_HOST) => {
-    // Use the Mongo driver's updated URL string parser
-    mongoose.set("useNewUrlParser", true);
-    // Use `findOneAndUpdate()` in place of findAndModify()
-    mongoose.set("useFindAndModify", false);
-    // Use `createIndex()` in place of `ensureIndex()`
-    mongoose.set("useCreateIndex", true);
-    // Use the new server discovery & monitoring engine
-    mongoose.set("useUnifiedTopology", true);
-    // Connect to the DB
-    mongoose.connect(DB_HOST);
-    // Log an error if we fail to connect
-    mongoose.connection.on("error", (err) => {
-      console.error(err);
-      console.log(
-        "MongoDB connection error. Please make sure MongoDB is running."
-      );
-      process.exit();
-    });
-  },
-
-  close: () => {
-    mongoose.connection.close();
-  },
+  connectDB,
+  closeDB,
 };
