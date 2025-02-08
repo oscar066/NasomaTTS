@@ -5,6 +5,8 @@ const multer = require("multer");
 const pdfParse = require("pdf-parse");
 const fs = require("fs");
 const path = require("path");
+const Document = require("../models/document"); // import the document model
+const { authenticate } = require("../middleware/authenticate"); // Assuming you have an authentication middleware
 
 const router = express.Router();
 
@@ -24,24 +26,42 @@ const upload = multer({
 
 router.post("/upload", upload.single("pdf"), async (req, res, next) => {
   if (!req.file) {
-    return res.status(400).json(
-      { error: "No file uploaded" }
-    );
+    return res.status(400).json({ error: "No file uploaded" });
   }
 
   try {
     const dataBuffer = fs.readFileSync(req.file.path);
     const pdfData = await pdfParse(dataBuffer);
 
+    // Save the document to MongoDB
+    const newDocument = new Document({
+      title: req.file.originalname,
+      content: pdfData.text,
+      author: req.user.id, // Use authenticated user's ID
+    });
+    await newDocument.save();
+
     // Clean up the file after processing
     fs.unlink(req.file.path, (err) => {
       if (err) console.error("Error deleting file:", err);
     });
 
-    res.json({ text: pdfData.text });
-
+    res.json({
+      message: "Document uploaded and saved successfully",
+      document: newDocument,
+    });
   } catch (error) {
     next(new Error("Error extracting text from PDF"));
+  }
+});
+
+// GET /api/pdf/documents
+router.get("/documents", async (req, res, next) => {
+  try {
+    const documents = await Document.find({ author: req.user.id }); // Fetch documents for the authenticated user
+    res.json(documents);
+  } catch (error) {
+    next(new Error("Error fetching documnets"));
   }
 });
 
