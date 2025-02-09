@@ -15,7 +15,7 @@ const Query = {
   },
 
   user: async (parent, { id }) => {
-    return await user.findById(id);
+    return await User.findById(id);
   },
 };
 
