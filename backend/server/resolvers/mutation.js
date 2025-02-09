@@ -1,10 +1,9 @@
-// const { GraphQLUpload } = require('graphql-upload');
 const {
   UserInputError,
   AuthenticationError,
   ForbiddenError,
 } = require("apollo-server-express");
-const bcrypt = require("bcryptjs");
+const bcrypt = require("bcrypt");
 const fs = require("fs");
 const path = require("path");
 const pdfParse = require("pdf-parse");
@@ -52,6 +51,8 @@ const Mutation = {
     fs.unlink(filepath, (err) => {
       if (err) console.error("Error deleting file:", err);
     });
+
+    return newDocument;
   },
 
   // Mutation for deleting a document
@@ -81,7 +82,7 @@ const Mutation = {
   signUp: async (parent, { username, email, password }) => {
     email = email.trim().toLowerCase();
     const hashed = await bcrypt.hash(password, 10);
-    const avatar = gravatar(email);
+    const avatar = gravatar.url(email, {s: '200', r: 'pg', d: 'mm'});
 
     try {
       const user = await User.create({
