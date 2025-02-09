@@ -21,6 +21,7 @@ if (!fs.existsSync(uploadsDir)) {
 
 // Import route modules
 const pdfRoutes = require('./routes/pdfRoutes');
+const documentRoutes = require('./routes/documentRoutes');
 const voiceRoutes = require('./routes/voiceRoutes');
 const speakRoutes = require('./routes/speakRoutes');
 
@@ -37,6 +38,7 @@ app.use(morgan('combined'));
 
 // Mount routes under an API namespace
 app.use('/api/pdf', pdfRoutes);
+app.use('/api/pdf', documentRoutes);
 app.use('/api/voices', voiceRoutes);
 app.use('/api/speak', speakRoutes);
 
