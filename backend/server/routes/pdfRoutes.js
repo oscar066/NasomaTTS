@@ -55,14 +55,4 @@ router.post("/upload", upload.single("pdf"), async (req, res, next) => {
   }
 });
 
-// GET /api/pdf/documents
-router.get("/documents", async (req, res, next) => {
-  try {
-    const documents = await Document.find({ author: req.user.id }); // Fetch documents for the authenticated user
-    res.json(documents);
-  } catch (error) {
-    next(new Error("Error fetching documnets"));
-  }
-});
-
 module.exports = router;
