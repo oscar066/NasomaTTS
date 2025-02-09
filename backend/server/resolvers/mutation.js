@@ -17,7 +17,7 @@ const { default: mongoose } = require("mongoose");
 const Mutation = {
   // Mutation for uploading a PDF (creating a document)
   uploadPDF: async (parent, { file }, context) => {
-    if (!user) {
+    if (!context.user) {
       throw new AuthenticationError(
         "You must be signed in to upload a document"
       );
@@ -45,7 +45,7 @@ const Mutation = {
     const newDocument = new Document({
       text: filename,
       content: pdfData.text,
-      author: mongoose.Types.ObjectId(user.id),
+      author: mongoose.Types.ObjectId(context.user.id),
     });
     await newDocument.save();
 
