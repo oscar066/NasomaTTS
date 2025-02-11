@@ -24,7 +24,7 @@ const upload = multer({
 
 // POST /api/pdf/upload
 
-router.post("/upload", upload.single("pdf"), async (req, res, next) => {
+router.post("/upload",authenticate, upload.single("pdf"), async (req, res, next) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
