@@ -6,7 +6,8 @@ const typeDefs = gql`
   type Document {
     id: ID!
     title: String!
-    author: String!
+    content: String!
+    author: User!
     createdAt: String!
     updatedAt: String!
   }
