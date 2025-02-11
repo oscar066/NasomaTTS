@@ -18,7 +18,7 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "graphql": "^16.10.0",
-    "graphql-upload": "^17.0.0",
+    "graphql-upload-ts": "^2.1.2",
     "gravatar": "^1.8.2",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
