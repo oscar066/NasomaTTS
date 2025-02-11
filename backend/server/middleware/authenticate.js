@@ -1,23 +1,21 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
-require("dotenv").config();
 
 const authenticate = async (req, res, next) => {
-  const token = req.headers.authorization;
-  if (!token) {
-    return res.status(401).json({ error: "No token provided" });
-  }
-
+  const token = req.header("Authorization").replace("Bearer ", "");
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
+    const user = await User.findOne({ _id: decoded.id, "tokens.token": token });
+
     if (!user) {
-      return res.status(401).json({ error: "Invalid token" });
+      throw new Error();
     }
+
+    req.token = token;
     req.user = user;
     next();
   } catch (error) {
-    res.status(401).json({ error: "Unauthorized" });
+    res.status(401).send({ error: "Please authenticate." });
   }
 };
 
