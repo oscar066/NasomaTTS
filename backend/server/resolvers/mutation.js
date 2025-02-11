@@ -42,7 +42,7 @@ const Mutation = {
     const pdfData = await pdfParse(dataBuffer);
 
     const newDocument = new Document({
-      text: filename,
+      title: filename,
       content: pdfData.text,
       author: mongoose.Types.ObjectId(context.user.id),
     });
