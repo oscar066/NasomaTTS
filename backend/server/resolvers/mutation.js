@@ -22,41 +22,36 @@ const Mutation = {
       );
     }
 
-    const { createdReadStream, filename, mimetype } = await file;
+    const formData = new FormData();
+    formData.append("pdf", file);
 
-    if (mimetype !== "application/pdf") {
-      throw new UserInputError("Only PDFs are allowed");
+    try {
+      const response = await axios.post(
+        process.env.PDF_UPLOAD_URL || "http://localhost:5000/api/pdf/upload",
+        formData
+      );
+      ({ title, content } = response.data);
+    } catch (error) {
+      throw new Error("Failed to process PDF. Please try again later.");
     }
 
-    const stream = createdReadStream();
-    const filepath = path.join(__dirname, `../uploads/${filename}`);
-    const out = fs.createWriteStream(filepath);
-    stream.pipe(out);
-
-    await new Promise((resolve, reject) => {
-      out.on("finish", resolve);
-      out.on("error", reject);
-    });
-
-    const dataBuffer = fs.readFileSync(filepath);
-    const pdfData = await pdfParse(dataBuffer);
-
     const newDocument = new Document({
-      title: filename,
-      content: pdfData.text,
+      title,
+      content,
       author: mongoose.Types.ObjectId(context.user.id),
     });
+    
     await newDocument.save();
-
-    fs.unlink(filepath, (err) => {
-      if (err) console.error("Error deleting file:", err);
-    });
 
     return newDocument;
   },
 
   // Mutation for deleting a document
   deleteDocument: async (parent, { id }, { user }) => {
+    if (!document) {
+      throw new UserInputError("Document not found.");
+    }
+
     if (!user) {
       throw new AuthenticationError(
         "You must be signed in to delete a document"
@@ -82,7 +77,7 @@ const Mutation = {
   signUp: async (parent, { username, email, password }) => {
     email = email.trim().toLowerCase();
     const hashed = await bcrypt.hash(password, 10);
-    const avatar = gravatar.url(email, {s: '200', r: 'pg', d: 'mm'});
+    const avatar = gravatar.url(email, { s: "200", r: "pg", d: "mm" });
 
     try {
       const user = await User.create({
