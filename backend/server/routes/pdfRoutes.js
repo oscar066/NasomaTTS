@@ -24,7 +24,7 @@ const upload = multer({
 
 // POST /api/pdf/upload
 
-router.post("/upload",authenticate, upload.single("pdf"), async (req, res, next) => {
+router.post("/upload", upload.single("pdf"), async (req, res, next) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
@@ -33,23 +33,17 @@ router.post("/upload",authenticate, upload.single("pdf"), async (req, res, next)
     const dataBuffer = fs.readFileSync(req.file.path);
     const pdfData = await pdfParse(dataBuffer);
 
-    // Save the document to MongoDB
-    const newDocument = new Document({
-      title: req.file.originalname,
-      content: pdfData.text,
-      author: req.user.id, // Use authenticated user's ID
-    });
-    await newDocument.save();
-
     // Clean up the file after processing
     fs.unlink(req.file.path, (err) => {
       if (err) console.error("Error deleting file:", err);
     });
 
     res.json({
-      message: "Document uploaded and saved successfully",
-      document: newDocument,
+      message: "PDF Document parsed saved successfully",
+      title: req.file.originalname,
+      content: pdfData.text,
     });
+    
   } catch (error) {
     next(new Error("Error extracting text from PDF"));
   }
