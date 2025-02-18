@@ -100,3 +100,17 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
+
+   // const formData = new FormData();
+    // formData.append("pdf", file);
+
+    // try {
+    //   const response = await axios.post(
+    //     process.env.PDF_UPLOAD_URL || "http://localhost:5000/api/pdf/upload",
+    //     formData
+    //   );
+    //   ({ title, content } = response.data);
+    // } catch (error) {
+    //   throw new Error("Failed to process PDF. Please try again later.");
+    // }
