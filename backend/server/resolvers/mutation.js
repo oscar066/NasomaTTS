@@ -22,36 +22,49 @@ const Mutation = {
       );
     }
 
-    const formData = new FormData();
-    formData.append("pdf", file);
+    // Await the file promise from graphql-upload-ts
+    const { createReadStream, filename, mimetype } = await file;
 
-    try {
-      const response = await axios.post(
-        process.env.PDF_UPLOAD_URL || "http://localhost:5000/api/pdf/upload",
-        formData
-      );
-      ({ title, content } = response.data);
-    } catch (error) {
-      throw new Error("Failed to process PDF. Please try again later.");
+    console.log("Detected MIME type:", mimetype);
+    if (mimetype !== "application/pdf") {
+      throw new UserInputError("Only PDFs are allowed.");
     }
 
+    // Create a file path (ensure the uploads folder exists)
+    const filepath = path.join(__dirname, "../uploads", filename);
+    const stream = createReadStream();
+    const out = fs.createWriteStream(filepath);
+
+    // Pipe the stream into the file and wait for completion
+    await new Promise((resolve, reject) => {
+      stream.pipe(out);
+      out.on("finish", resolve);
+      out.on("error", reject);
+    });
+
+    // Read the file into a buffer and extract PDF text
+    const dataBuffer = fs.readFileSync(filepath);
+    const pdfData = await pdfParse(dataBuffer);
+
+    // Create and save a new document with the extracted content
     const newDocument = new Document({
-      title,
-      content,
+      title: filename,
+      content: pdfData.text,
       author: mongoose.Types.ObjectId(context.user.id),
     });
-    
+
     await newDocument.save();
+
+    // Optionally, delete the file after processing
+    fs.unlink(filepath, (err) => {
+      if (err) console.error("Error deleting file:", err);
+    });
 
     return newDocument;
   },
 
   // Mutation for deleting a document
   deleteDocument: async (parent, { id }, { user }) => {
-    if (!document) {
-      throw new UserInputError("Document not found.");
-    }
-
     if (!user) {
       throw new AuthenticationError(
         "You must be signed in to delete a document"
@@ -59,7 +72,11 @@ const Mutation = {
     }
 
     const document = await Document.findById(id);
-    if (document && String(document.author) !== user.id) {
+    if (!document) {
+      throw new UserInputError("Document not found.");
+    }
+
+    if (String(document.author) !== user.id) {
       throw new ForbiddenError(
         "You don't have permission to delete this document"
       );
@@ -92,7 +109,7 @@ const Mutation = {
     }
   },
 
-  // Mutation for signing up a user
+  // Mutation for signing in a user
   signIn: async (parent, { username, email, password }) => {
     if (email) {
       email = email.trim().toLowerCase();
