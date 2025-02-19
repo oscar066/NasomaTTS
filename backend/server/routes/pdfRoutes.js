@@ -5,8 +5,7 @@ const multer = require("multer");
 const pdfParse = require("pdf-parse");
 const fs = require("fs");
 const path = require("path");
-const Document = require("../models/document"); // import the document model
-const { authenticate } = require("../middleware/authenticate"); // Assuming you have an authentication middleware
+const { authenticate } = require("../middleware/authenticate"); 
 
 const router = express.Router();
 
@@ -40,6 +39,7 @@ router.post("/upload", upload.single("pdf"), async (req, res, next) => {
 
     res.json({
       message: "PDF Document parsed saved successfully",
+      filePath: `/uploads/${req.file.filename}`,
       title: req.file.originalname,
       content: pdfData.text,
     });
