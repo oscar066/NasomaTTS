@@ -3,3 +3,5 @@ node_modules/
 
 # Ignore DS Store
 .DS_Store
+
+# .env
