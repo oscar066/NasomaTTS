@@ -1,7 +1,6 @@
 // server.js
 const express = require("express");
 const { ApolloServer } = require("apollo-server-express");
-const { graphqlUploadExpress } = require("graphql-upload-ts");
 const cors = require("cors");
 const morgan = require("morgan");
 const helmet = require("helmet");
@@ -36,17 +35,6 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan("combined"));
 // app.use(helmet());
-
-// File upload middleware for GraphQL
-// Middleware for handling file uploads
-app.use(
-  "/graphql",
-  graphqlUploadExpress({
-    maxFileSize: 10000000,
-    maxFiles: 1,
-    overrideSendResponse: false,
-  })
-);
 
 // Mount routes under an API namespace
 app.use("/api/pdf", pdfRoutes);
