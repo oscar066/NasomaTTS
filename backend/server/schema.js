@@ -1,8 +1,6 @@
 const { gql } = require("apollo-server-express");
 
 const typeDefs = gql`
-  scalar Upload
-
   type Document {
     id: ID!
     title: String!
@@ -29,7 +27,7 @@ const typeDefs = gql`
   }
 
   type Mutation {
-    uploadPDF(file: Upload!): Document!
+    createDoc(title: String!, content: String!): Document!
     deleteDocument(id: ID!): Boolean!
     signUp(username: String!, email: String!, password: String!): String!
     signIn(username: String!, email: String!, password: String!): String!
