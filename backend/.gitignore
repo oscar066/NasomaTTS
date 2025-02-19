@@ -4,4 +4,8 @@ node_modules/
 # ignore environment variables 
 .env
 server/.env
+../graphql-upload/.env
 
+# ignore build scripts 
+backend/.DS_Store
+backend/server/.DS_Store
