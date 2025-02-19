@@ -3,11 +3,11 @@ const User = require("../models/user");
 
 const Query = {
   documents: async () => {
-    return await Document.find();
+    return await Document.find().populate("author");
   },
 
   document: async (parent, { id }) => {
-    return await Document.findById(id);
+    return await Document.findById(id).populate("author");
   },
 
   users: async () => {
