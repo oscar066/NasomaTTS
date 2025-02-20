@@ -1,5 +1,3 @@
-// src/components/TTS/DocumentReader.jsx
-
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -19,6 +17,12 @@ export default function DocumentReader() {
   const [voices, setVoices] = useState([]);
 
   // Fetch document text if a documentId is present.
+
+  // When user clicks on the upload/add button the documents should be saved to the mongo database
+  // ie the function should extract the text from the pdf and save that as content , the name of the pdf as the title and have an id
+  // Then the saved documents should be displayed in a card on the dashboard and when clicked they should navigate to a page that displays the
+  // ie document and convert text to speech
+  // the documents pulled from the database based on the id
 
   useEffect(() => {
     if (documentId) {
@@ -64,8 +68,8 @@ export default function DocumentReader() {
         formData,
         { headers: { "Content-Type": "multipart/form-data" } }
       );
-      setText(response.data.text);
-      setParagraphs(response.data.text.split(/\n\s*\n/).filter(Boolean));
+      setText(response.data.content);
+      setParagraphs(response.data.content.split(/\n\s*\n/).filter(Boolean));
     } catch (error) {
       console.error("Error extracting text from PDF:", error);
       alert("Error extracting text from PDF");
