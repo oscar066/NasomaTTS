@@ -1,15 +1,15 @@
 // import TextToSpeechConverter from "../components/dashboard/TextToSpeechConverter";
 // import RecentConversions from "../components/dashboard/RecentConversions";
+// import Dashboard from "../components/Dashboard/Dashboard";
+import React from "react";
+import DocumentReader from "../components/TTS/documentReader2";
 
-// export default function DashboardPage() {
-//   return (
-//     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-//       <div className="md:col-span-2">
-//         <TextToSpeechConverter />
-//       </div>
-//       <div>
-//         <RecentConversions />
-//       </div>
-//     </div>
-//   );
-// }
+const DashBoard = () => {
+  return (
+    <div className='pt-8'> 
+      <DocumentReader />
+    </div>
+  );
+};
+
+export default DashBoard;
