@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 export default function FinalCTA() {
   return (
@@ -11,9 +12,11 @@ export default function FinalCTA() {
           Join thousands of satisfied users and transform your text into
           lifelike speech with VoxAI.
         </p>
-        <Button size="lg" variant="secondary">
-          Sign Up for Free
-        </Button>
+        <Link href="/auth/signup/" passHref>
+          <Button size="lg" variant="secondary">
+            Sign Up for Free
+          </Button>
+        </Link>
       </div>
     </section>
   );

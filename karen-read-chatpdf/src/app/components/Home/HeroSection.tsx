@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Play } from "lucide-react";
+import Link from "next/link";
 
 export default function HeroSection() {
   return (
@@ -13,9 +14,11 @@ export default function HeroSection() {
           and accents. Experience the power of AI-driven voice synthesis.
         </p>
         <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4">
-          <Button size="lg" className="w-full sm:w-auto">
-            Get Started for Free
-          </Button>
+          <Link href="/auth/signup" passHref>
+            <Button size="lg" className="w-full sm:w-auto">
+              Get Started for Free
+            </Button>
+          </Link>
           <Button variant="outline" size="lg" className="w-full sm:w-auto">
             <Play className="mr-2 h-4 w-4" /> Listen to Demo
           </Button>

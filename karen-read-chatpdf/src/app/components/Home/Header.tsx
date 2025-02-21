@@ -42,7 +42,9 @@ export default function Header() {
             Testimonials
           </Link>
         </nav>
-        <Button>Try for Free</Button>
+        <Link href="/auth/signup/" passHref>
+          <Button>Get Started</Button>
+        </Link>
       </div>
     </header>
   );
