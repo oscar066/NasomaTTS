@@ -1,5 +1,8 @@
+"use client";
+
+import type React from "react";
 import { useState } from "react";
-import axios from "axios";
+import { gql, useMutation } from "@apollo/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,10 +11,13 @@ import { Loader2, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { FaGoogle } from "react-icons/fa";
 import { BsEyeFill, BsEyeSlashFill } from "react-icons/bs";
-// import { useToast } from "@/hooks/use-toast";
-// import { ToastAction } from "@/components/ui/toast";
-import { Toaster } from "@/components/ui/sonner";
 import { useRouter } from "next/navigation";
+
+const SIGN_UP_MUTATION = gql`
+  mutation SignUp($username: String!, $email: String!, $password: String!) {
+    signUp(username: $username, email: $email, password: $password)
+  }
+`;
 
 export default function SignupPage() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -24,15 +30,15 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [showConfirmPassword, setShowConfirmPassword] =
     useState<boolean>(false);
-  // const { toast } = useToast();
   const router = useRouter();
+
+  const [signUp] = useMutation(SIGN_UP_MUTATION);
 
   async function onSubmit(event: React.SyntheticEvent) {
     event.preventDefault();
     setIsLoading(true);
     setErrorMessage(null);
 
-    // Basic validation
     if (!username || !email || !password || !confirmPassword) {
       setErrorMessage("All fields are required.");
       setIsLoading(false);
@@ -52,87 +58,85 @@ export default function SignupPage() {
     }
 
     try {
-      // Sending the request to the registration endpoint
-      const response = await axios.post(
-        "http://localhost:8000/api/accounts/auth/register/",
-        {
+      const response = await signUp({
+        variables: {
           username,
           email,
           password,
-        }
-      );
+        },
+      });
 
-      // Handle the successful registration
       console.log("Registration successful:", response.data);
 
-    //   toast({
-    //     title: "Registration Successful",
-    //     description: "Your account has been created successfully!",
-    //     duration: 3000,
-    //     className: "text-green-700",
-    //   });
-
-      // Reset the form fields
       setName("");
       setEmail("");
       setPassword("");
       setConfirmPassword("");
       setTermsAccepted(false);
 
-      // Redirect to login page after a short delay
       setTimeout(() => {
         router.push("/auth/login");
       }, 3000);
     } catch (error) {
-      // Handle errors
       console.error("Registration failed:", error);
       setErrorMessage("Registration failed. Please try again.");
-    //   toast({
-    //     title: "Registration Failed",
-    //     description: "Please try again.",
-    //     action: <ToastAction altText="Try again">Try again</ToastAction>,
-    //     className: "text-red-800",
-    //   });
     } finally {
       setIsLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-green-50">
-      <Toaster />
+    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-b from-background to-secondary">
       <div className="w-full max-w-md px-4 py-8 flex-col">
-        <div className="bg-white p-8 rounded-lg shadow-md">
+        <div className="bg-card p-8 rounded-lg shadow-md">
           <div className="flex flex-col space-y-2 text-center mb-6">
-            <UserPlus className="mx-auto h-12 w-12 text-green-700" />
-            <h1 className="text-2xl font-semibold tracking-tight text-green-700">
+            <Link
+              href="/"
+              className="flex items-center justify-center space-x-2"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-8 w-8 text-primary"
+              >
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" x2="12" y1="19" y2="22" />
+              </svg>
+              <span className="text-2xl font-bold text-primary">VoxAI</span>
+            </Link>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               Create an account
             </h1>
-            <p className="text-sm text-green-600">
+            <p className="text-sm text-muted-foreground">
               Enter your details below to create your account
             </p>
           </div>
           {errorMessage && (
-            <p className="text-red-700 text-center mb-4">{errorMessage}</p>
+            <p className="text-destructive text-center mb-4">{errorMessage}</p>
           )}
           <div className="grid gap-6">
             <form onSubmit={onSubmit}>
               <div className="grid gap-2">
                 <div className="grid gap-1">
-                  <Label className="sr-only" htmlFor="name">
+                  <Label className="sr-only" htmlFor="username">
                     Username
                   </Label>
                   <Input
                     id="username"
                     value={username}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Full Name"
+                    placeholder="Username"
                     type="text"
                     autoCapitalize="words"
-                    autoComplete="name"
+                    autoComplete="username"
                     autoCorrect="off"
                     disabled={isLoading}
-                    className="border-green-300 focus:border-green-500 focus:ring-green-500"
                   />
                 </div>
                 <div className="grid gap-1">
@@ -149,7 +153,6 @@ export default function SignupPage() {
                     autoComplete="email"
                     autoCorrect="off"
                     disabled={isLoading}
-                    className="border-green-300 focus:border-green-500 focus:ring-green-500"
                   />
                 </div>
                 <div className="grid gap-1 relative">
@@ -166,16 +169,15 @@ export default function SignupPage() {
                     autoComplete="new-password"
                     autoCorrect="off"
                     disabled={isLoading}
-                    className="border-green-300 focus:border-green-500 focus:ring-green-500 pr-10"
                   />
                   <div
                     className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer"
                     onClick={() => setShowPassword(!showPassword)}
                   >
                     {showPassword ? (
-                      <BsEyeFill className="text-green-600" />
+                      <BsEyeFill className="text-muted-foreground" />
                     ) : (
-                      <BsEyeSlashFill className="text-green-600" />
+                      <BsEyeSlashFill className="text-muted-foreground" />
                     )}
                   </div>
                 </div>
@@ -193,21 +195,20 @@ export default function SignupPage() {
                     autoComplete="new-password"
                     autoCorrect="off"
                     disabled={isLoading}
-                    className={`border-green-300 focus:border-green-500 focus:ring-green-500 pr-10 
-                    ${
-                      password !== confirmPassword &&
-                      confirmPassword &&
-                      "border-red-500"
-                    }`}
+                    className={
+                      password !== confirmPassword && confirmPassword
+                        ? "border-destructive"
+                        : ""
+                    }
                   />
                   <div
                     className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   >
                     {showConfirmPassword ? (
-                      <BsEyeFill className="text-green-600" />
+                      <BsEyeFill className="text-muted-foreground" />
                     ) : (
-                      <BsEyeSlashFill className="text-green-600" />
+                      <BsEyeSlashFill className="text-muted-foreground" />
                     )}
                   </div>
                 </div>
@@ -215,27 +216,24 @@ export default function SignupPage() {
                   <Checkbox
                     id="terms"
                     checked={termsAccepted}
-                    onChange={(e) =>
-                      setTermsAccepted((e.target as HTMLInputElement).checked)
+                    onCheckedChange={(checked) =>
+                      setTermsAccepted(checked as boolean)
                     }
                   />
                   <label
                     htmlFor="terms"
-                    className="text-sm font-medium leading-none text-green-700"
+                    className="text-sm font-medium leading-none text-muted-foreground"
                   >
                     I agree to the{" "}
                     <Link
                       href="/terms"
-                      className="text-green-700 underline hover:text-green-800"
+                      className="text-primary underline hover:text-primary/80"
                     >
                       terms and conditions
                     </Link>
                   </label>
                 </div>
-                <Button
-                  disabled={isLoading}
-                  className="bg-green-700 hover:bg-green-800 text-white"
-                >
+                <Button disabled={isLoading}>
                   {isLoading ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
@@ -247,20 +245,15 @@ export default function SignupPage() {
             </form>
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-green-300" />
+                <span className="w-full border-t border-muted" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white px-2 text-green-600">
+                <span className="bg-card px-2 text-muted-foreground">
                   Or continue with
                 </span>
               </div>
             </div>
-            <Button
-              variant="outline"
-              type="button"
-              disabled={isLoading}
-              className="border-green-300 text-green-700 hover:bg-green-100"
-            >
+            <Button variant="outline" type="button" disabled={isLoading}>
               {isLoading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -269,11 +262,11 @@ export default function SignupPage() {
               Google
             </Button>
           </div>
-          <p className="mt-6 text-center text-sm text-green-600">
+          <p className="mt-6 text-center text-sm text-muted-foreground">
             Already have an account?{" "}
             <Link
               href="/auth/login"
-              className="text-green-700 hover:text-green-800 underline underline-offset-4"
+              className="text-primary hover:text-primary/80 underline underline-offset-4"
             >
               Sign in
             </Link>
