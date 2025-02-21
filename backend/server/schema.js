@@ -30,7 +30,7 @@ const typeDefs = gql`
     createDoc(title: String!, content: String!): Document!
     deleteDocument(id: ID!): Boolean!
     signUp(username: String!, email: String!, password: String!): String!
-    signIn(username: String!, email: String!, password: String!): String!
+    signIn(email: String!, password: String!): String!
   }
 `;
 
