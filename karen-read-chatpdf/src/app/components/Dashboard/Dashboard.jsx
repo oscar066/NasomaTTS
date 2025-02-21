@@ -2,8 +2,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Sidebar } from "./SideBar";
-import { TopBar } from "./TopBar";
+import { TopBar } from "../dashboard/TopBar";
 import { FileCard } from "./FileCard";
 import { AudioControls } from "./AudioControls";
 
