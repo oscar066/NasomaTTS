@@ -1,14 +1,7 @@
-// // src/app/documents/[documentId]/page.jsx
-// 'use client';
+'use client';
 
-// import dynamic from "next/dynamic";
+import DocumentReader from "../../components/TTS/documentReader3";
 
-// // Ensure this page is client rendered.
-// const DocumentReader = dynamic(
-//     () => import("../../../components/TTS/DocumentReader"),
-//     { ssr: false }
-//   );
-
-// export default function DocumentPage() {
-//   return <DocumentReader />;
-// }
+export default function DocumentPage() {
+    return <DocumentReader />;
+}
