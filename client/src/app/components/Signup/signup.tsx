@@ -108,7 +108,9 @@ export default function SignupPage() {
                 <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                 <line x1="12" x2="12" y1="19" y2="22" />
               </svg>
-              <span className="text-2xl font-bold text-primary">VoxAI</span>
+              <span className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+                Nasoma
+              </span>
             </Link>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               Create an account
