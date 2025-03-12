@@ -2,7 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Home, FileText, Upload, Cog, HelpCircle } from "lucide-react";
 
-const Sidebar = ({ isOpen }) => {
+export default function Sidebar({ isOpen }) {
   return (
     <aside 
       className={`
@@ -52,5 +52,3 @@ const Sidebar = ({ isOpen }) => {
     </aside>
   );
 };
-
-export default Sidebar;
