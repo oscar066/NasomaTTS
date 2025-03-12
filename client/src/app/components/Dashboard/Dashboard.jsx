@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { TopBar } from "./TopBar";
 import { FileCard } from "./FileCard";
-import Sidebar from "./Sidebar";
+import Sidebar from "./SideBar";
 import { useRouter } from "next/navigation";
 import { useQuery, gql } from "@apollo/client";
 
