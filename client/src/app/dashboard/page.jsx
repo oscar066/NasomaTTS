@@ -3,7 +3,7 @@ import React from "react";
 
 const DashBoard = () => {
   return (
-    <div className='pt-8'> 
+    <div > 
       <Dashboard />
     </div>
   );
