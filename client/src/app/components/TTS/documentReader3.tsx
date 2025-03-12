@@ -231,7 +231,7 @@ export default function DocumentReader() {
   }
 
   return (
-    <Card className="max-w-4xl mx-auto my-10">
+    <Card className="max-w-4xl mx-auto my-4">
       <CardHeader>
         <CardTitle className="text-2xl font-semibold text-center">
           📖 Document Reader 🎤
