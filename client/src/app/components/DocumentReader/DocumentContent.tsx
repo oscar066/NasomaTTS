@@ -18,7 +18,7 @@ const DocumentContent: React.FC<DocumentContentProps> = ({
   currentWordIndex,
 }) => {
   return (
-    <div className="text-left mx-auto my-5 p-4 bg-gray-100 rounded max-h-[400px] overflow-y-auto">
+    <div className="text-left mx-auto p-4 bg-gray-100 rounded overflow-y-auto">
       {paragraphs.map((para, index) => (
         <div
           key={index}
