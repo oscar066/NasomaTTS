@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import {
-  CheckCircle,
+  // CheckCircle,
   ArrowRight,
   BookOpen,
   Headphones,

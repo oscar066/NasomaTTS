@@ -1,6 +1,6 @@
 // Hero Section Component
 import { Button } from "@/components/ui/button";
-import { Play, BookOpen, Headphones, Laptop, Globe } from "lucide-react";
+import { Play, BookOpen, Headphones, Globe } from "lucide-react";
 import Link from "next/link";
 
 export default function HeroSection() {
