@@ -1,9 +1,58 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Home, FileText, Upload, Cog, HelpCircle } from "lucide-react";
+import { Home, FileText, Upload, Cog, HelpCircle, Loader2 } from "lucide-react";
 import NasomaLogo from "../Logo/nasoma-logo";
+import { useDocumentUpload } from "@/hooks/useDocumentUpload";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export default function Sidebar({ isOpen }) {
+  const fileInputRef = useRef(null);
+  const { uploadDocument, isLoading, error } = useDocumentUpload();
+  const router = useRouter();
+
+  const handleUploadClick = () => {
+    fileInputRef.current.click();
+  };
+
+  const handleFileChange = async (event) => {
+    if (event.target.files && event.target.files[0]) {
+      try {
+        const file = event.target.files[0];
+
+        // Validate file is PDF
+        if (file.type !== "application/pdf") {
+          toast({
+            title: "Invalid file type",
+            description: "Please upload a PDF file",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Upload document
+        const result = await uploadDocument(file);
+
+        // Show success message
+        toast.success("Document uploaded successfully", {
+          description: `${file.name} has been processed and saved`,
+        });
+
+        // Navigate to the document viewer if needed
+        if (result && result.id) {
+          router.push(`/documents/${result.id}`);
+        }
+      } catch (err) {
+        toast.error("Upload failed", {
+          description: error || "An error occurred during upload",
+        });
+      } finally {
+        // Reset file input
+        event.target.value = "";
+      }
+    }
+  };
+
   return (
     <aside
       className={`
@@ -39,9 +88,24 @@ export default function Sidebar({ isOpen }) {
         </div>
 
         {/* Upload Button */}
-        <Button className="w-full justify-start bg-blue-600 hover:bg-blue-700 text-white">
-          <Upload className="mr-3 h-4 w-4" />
-          Upload
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+          accept="application/pdf"
+        />
+        <Button
+          onClick={handleUploadClick}
+          disabled={isLoading}
+          className="w-full justify-start bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          {isLoading ? (
+            <Loader2 className="mr-3 h-4 w-4 animate-spin" />
+          ) : (
+            <Upload className="mr-3 h-4 w-4" />
+          )}
+          {isLoading ? "Uploading..." : "Upload"}
         </Button>
 
         {/* Settings */}
