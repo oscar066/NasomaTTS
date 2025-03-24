@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { gql, useMutation } from "@apollo/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import Link from "next/link";
 import { FaGoogle } from "react-icons/fa";
 import { BsEyeFill, BsEyeSlashFill } from "react-icons/bs";
 import { useRouter } from "next/navigation";
+import { signIn, useSession } from "next-auth/react";
 
 const SIGN_UP_MUTATION = gql`
   mutation SignUp($username: String!, $email: String!, $password: String!) {
@@ -31,8 +32,15 @@ export default function SignupPage() {
   const [showConfirmPassword, setShowConfirmPassword] =
     useState<boolean>(false);
   const router = useRouter();
+  const { data: session } = useSession();
 
   const [signUp] = useMutation(SIGN_UP_MUTATION);
+
+  useEffect(() => {
+    if (session?.user) {
+      router.push("/dashboard");
+    }
+  }, [router, session]);
 
   async function onSubmit(event: React.SyntheticEvent) {
     event.preventDefault();
@@ -66,6 +74,15 @@ export default function SignupPage() {
         },
       });
 
+      const result = await signIn("credentials", {
+        redirect: false,
+        email,
+        password,
+      });
+      if (result!.error) {
+        alert(result!.error);
+      }
+
       console.log("Registration successful:", response.data);
 
       setName("");
@@ -73,10 +90,6 @@ export default function SignupPage() {
       setPassword("");
       setConfirmPassword("");
       setTermsAccepted(false);
-
-      setTimeout(() => {
-        router.push("/auth/login");
-      }, 3000);
     } catch (error) {
       console.error("Registration failed:", error);
       setErrorMessage("Registration failed. Please try again.");

@@ -1,22 +1,15 @@
 "use client";
 
-import type React from "react";
-import { useState } from "react";
-import { gql, useMutation } from "@apollo/client";
+import React, { useState, useEffect } from "react";
+import { signIn, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogIn, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FaGoogle } from "react-icons/fa";
 import { BsEyeFill, BsEyeSlashFill } from "react-icons/bs";
-
-const SIGN_IN_MUTATION = gql`
-  mutation SignIn($email: String!, $password: String!) {
-    signIn(email: $email, password: $password)
-  }
-`;
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -25,8 +18,13 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const router = useRouter();
+  const { data: session } = useSession();
 
-  const [signIn] = useMutation(SIGN_IN_MUTATION);
+  useEffect(() => {
+    if (session?.user) {
+      router.push("/dashboard");
+    }
+  }, [router, session]);
 
   async function onSubmit(event: React.SyntheticEvent) {
     event.preventDefault();
@@ -34,22 +32,16 @@ export default function LoginPage() {
     setErrorMessage(null);
 
     try {
-      const response = await signIn({
-        variables: {
-          email,
-          password,
-        },
+      const result = await signIn("credentials", {
+        redirect: false,
+        email,
+        password,
       });
 
-      localStorage.setItem("token", response.data.signIn);
-      localStorage.setItem("userEmail", email);
-
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 1000);
+      console.log("Sign in result:", result);
     } catch (error) {
       console.error("Login failed:", error);
-      setErrorMessage("Login failed. Please check your email and password.");
+      setErrorMessage("An unexpected error occurred. Please try again later.");
     } finally {
       setIsLoading(false);
     }
@@ -81,7 +73,6 @@ export default function LoginPage() {
                 </svg>
                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
               </div>
-              {/* <span className="text-2xl font-bold text-primary">Nasoma</span> */}
               <span className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
                 Nasoma
               </span>
