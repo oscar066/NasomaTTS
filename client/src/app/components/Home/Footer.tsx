@@ -11,9 +11,11 @@ import {
   MessageSquare,
 } from "lucide-react";
 
-export default function Footer() {
-  const currentYear = new Date().getFullYear();
+const getYear = () => {
+  return new Date().getFullYear();
+};
 
+export default function Footer() {
   return (
     <footer className="bg-background pt-16 pb-8 border-t border-primary/10">
       <div className="container mx-auto px-4">
@@ -222,7 +224,7 @@ export default function Footer() {
         {/* Copyright */}
         <div className="flex flex-col md:flex-row justify-between items-center text-center md:text-left">
           <div className="text-sm text-muted-foreground mb-4 md:mb-0">
-            © {currentYear} Nasoma. All rights reserved.
+            © {getYear()} Nasoma. All rights reserved.
           </div>
           <div className="flex flex-wrap justify-center md:justify-end gap-x-6 gap-y-2">
             <div className="flex items-center text-xs">
