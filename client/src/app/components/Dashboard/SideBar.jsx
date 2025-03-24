@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 
 export default function Sidebar({ isOpen }) {
   const fileInputRef = useRef(null);
-  const { uploadDocument, isLoading, error } = useDocumentUpload();
+  const { uploadDocument, isLoading } = useDocumentUpload();
   const router = useRouter();
 
   const handleUploadClick = () => {
@@ -43,8 +43,9 @@ export default function Sidebar({ isOpen }) {
           router.push(`/documents/${result.id}`);
         }
       } catch (err) {
+        // Use the caught error message directly instead of the state variable "error"
         toast.error("Upload failed", {
-          description: error || "An error occurred during upload",
+          description: err.message || "An error occurred during upload",
         });
       } finally {
         // Reset file input
