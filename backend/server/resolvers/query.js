@@ -10,6 +10,14 @@ const Query = {
     return await Document.findById(id).populate("author");
   },
 
+  documentsByAuthor: async (parent, { email }) => {
+    const user = await User.findOne({ email });
+    if(!user){
+      throw new Error("User not found");
+    }
+    return await Document.find({ author: user._id }).populate("author");
+  },
+
   users: async () => {
     return await User.find();
   },
