@@ -13,13 +13,14 @@ const { default: mongoose } = require("mongoose");
 const Mutation = {
   // Mutation for creating a document
   createDoc: async (parent, { title, content }, context) => {
+    // Check if user is authenticated
     if (!context.user) {
       throw new AuthenticationError(
         "You must be signed in to upload a document"
       );
     }
 
-    // Validate input.
+    // Validate input
     if (!title || !content) {
       throw new UserInputError(
         "Both title and content are required to create a document"
@@ -30,15 +31,22 @@ const Mutation = {
       throw new UserInputError("Title is too long (max 200 characters)");
     }
 
+    // Find the user by id from the JWT token
+    const user = await User.findById(context.user.id);
+    if (!user) {
+      throw new AuthenticationError("User not found");
+    }
+
+    // Create new document with the user's ID
     const newDocument = new Document({
       title,
       content,
-      author: new mongoose.Types.ObjectId(context.user.id),
+      author: user._id, // Use the user's _id directly
     });
 
     try {
       await newDocument.save();
-      // Populate the author field so that GraphQL can resolve full User details.
+      // Populate the author field so that GraphQL can resolve full User details
       await newDocument.populate("author");
     } catch (err) {
       console.error("Error saving new document:", err);
@@ -50,8 +58,7 @@ const Mutation = {
 
   // Mutation for deleting a document
   deleteDocument: async (parent, { id }, context) => {
-    const user = context.user;
-    if (!user) {
+    if (!context.user) {
       throw new AuthenticationError(
         "You must be signed in to delete a document"
       );
@@ -62,7 +69,14 @@ const Mutation = {
       throw new UserInputError("Document not found.");
     }
 
-    if (String(document.author) !== user.id) {
+    // Find the user by id from the JWT token
+    const user = await User.findById(context.user.id);
+    if (!user) {
+      throw new AuthenticationError("User not found");
+    }
+
+    // Check if the user is the author of the document
+    if (String(document.author) !== String(user._id)) {
       throw new ForbiddenError(
         "You don't have permission to delete this document"
       );
