@@ -22,8 +22,10 @@ const typeDefs = gql`
   type Query {
     documents: [Document!]
     document(id: ID!): Document
+    documentsByAuthor(email: String!): [Document!]
     users: [User!]
     user(id: ID!): User
+    me: User
   }
 
   type Mutation {
