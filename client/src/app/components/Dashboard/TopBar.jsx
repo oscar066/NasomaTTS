@@ -3,6 +3,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Grid, Search, Bell, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { signOut } from "next-auth/react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,6 +12,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function TopBar({ onToggleSidebar }) {
+  const handleLogout = async () => {
+    await signOut({
+      callbackUrl: "/auth/login",
+      redirect: true,
+    });
+  };
+
   return (
     <header className="bg-white shadow-sm z-10">
       <div className="flex items-center justify-between p-4">
@@ -40,7 +48,7 @@ export function TopBar({ onToggleSidebar }) {
             <DropdownMenuContent align="end">
               <DropdownMenuItem>Profile</DropdownMenuItem>
               <DropdownMenuItem>Account Settings</DropdownMenuItem>
-              <DropdownMenuItem>Logout</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
