@@ -38,7 +38,7 @@ export default function LoginPage() {
         password,
       });
 
-      console.log("Sign in result:", result);
+     // console.log("Sign in result:", result);     
     } catch (error) {
       console.error("Login failed:", error);
       setErrorMessage("An unexpected error occurred. Please try again later.");
