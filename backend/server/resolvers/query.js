@@ -25,6 +25,14 @@ const Query = {
   user: async (parent, { id }) => {
     return await User.findById(id);
   },
+
+  me: async (parent, args, context) => {
+    if (!context.user) {
+      throw new AuthenticationError("You must be signed in");
+    }
+
+    return await User.findById(context.user.id);
+  },
 };
 
 module.exports = Query;
