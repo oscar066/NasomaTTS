@@ -1,16 +1,35 @@
-import NextAuth from "next-auth";
+import NextAuth, { DefaultSession, Session, SessionStrategy } from "next-auth";
+import { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { ApolloClient, InMemoryCache, gql } from "@apollo/client";
 import jwt from "jsonwebtoken";
 
-// Initialize Apollo Client to connect to your GraphQL endpoint
+// Add type declarations for NextAuth
+declare module "next-auth" {
+  interface Session extends DefaultSession {
+    accessToken?: string;
+    user: {
+      id: string;
+      email: string;
+    } & DefaultSession["user"];
+  }
+}
 
+// Initialize Apollo Client with better configuration
 const client = new ApolloClient({
-  uri: "http://localhost:5000/graphql",
+  uri: process.env.GRAPHQL_URI || "http://localhost:5000/graphql",
   cache: new InMemoryCache(),
 });
 
-const handler = NextAuth({
+// GraphQL mutation
+const SIGN_IN_MUTATION = gql`
+  mutation SignIn($email: String!, $password: String!) {
+    signIn(email: $email, password: $password)
+  }
+`;
+
+export const authOptions = {
+  debug: process.env.NODE_ENV === "development",
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -25,73 +44,83 @@ const handler = NextAuth({
           type: "password",
         },
       },
-
       async authorize(credentials, req) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error("Email and password are required");
+        }
+
         try {
-          // Call your GraphQL signIn mutation using Apollo Client
           const response = await client.mutate({
-            mutation: gql`
-              mutation SignIn($email: String!, $password: String!) {
-                signIn(email: $email, password: $password)
-              }
-            `,
+            mutation: SIGN_IN_MUTATION,
             variables: {
-              email: credentials?.email,
-              password: credentials?.password,
+              email: credentials.email,
+              password: credentials.password,
             },
           });
 
-          // Extract the token returned from the mutation
           const token = response?.data?.signIn;
           if (!token) {
-            return null;
+            throw new Error("Invalid credentials");
           }
 
-          // Verify the token to ensure it is valid and to extract the payload
           if (!process.env.JWT_SECRET) {
-            throw new Error("JWT_SECRET is not defined");
-          }
-          const user = jwt.verify(token, process.env.JWT_SECRET);
-          if (!user || typeof user === "string") {
-            return null;
+            throw new Error(
+              "Server configuration error: JWT_SECRET is not defined"
+            );
           }
 
-          // Return user object that NextAuth will use in the session
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          if (!decoded || typeof decoded === "string") {
+            throw new Error("Invalid token format");
+          }
+
           return {
-            id: (user as any).id, // ensure your token payload contains an id field
-            email: credentials?.email,
-            token, // you might store the token if needed later in callbacks
+            id: (decoded as any).id,
+            email: credentials.email,
+            token,
           };
+          
         } catch (error) {
-          console.error("Error in authorize function:", error);
-          return null;
+          console.error("Authentication error:", error);
+          throw new Error(
+            error instanceof Error ? error.message : "Authentication failed"
+          );
         }
       },
     }),
   ],
   session: {
-    strategy: "jwt",
+    strategy: "jwt" as SessionStrategy,
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
 
   callbacks: {
-    async jwt({ token, user }) {
-      // On initial sign in, merge user data into the JWT token.
+    async jwt({ token, user }: { token: JWT; user: any }) {
       if (user) {
-        token = { ...token, ...user };
+        token.id = user.id;
+        token.email = user.email;
+        token.accessToken = user.token;
       }
       return token;
     },
 
-    async session({ session, token }) {
-      // Make the token properties available in the session.
-      session.user = token as any;
+    async session({ session, token }: { session: Session; token: JWT }) {
+      if (token) {
+        session.user = {
+          id: token.id as string,
+          email: token.email as string,
+        };
+        session.accessToken = token.accessToken as string;
+      }
       return session;
     },
   },
+
   pages: {
-    signIn: "/auth/login", // Your custom sign-in page route
+    signIn: "/auth/login",
   },
   secret: process.env.NEXTAUTH_SECRET,
-});
+};
 
+const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST };
