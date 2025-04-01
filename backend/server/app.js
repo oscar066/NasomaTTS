@@ -47,13 +47,16 @@ const server = new ApolloServer({
   typeDefs,
   resolvers,
   context: ({ req }) => {
-    const token = req.headers.authorization || "";
+    // Get token and remove "Bearer " prefix
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.replace("Bearer ", "");
+
     let user = null;
     if (token) {
       try {
         user = jwt.verify(token, process.env.JWT_SECRET);
       } catch (err) {
-        console.warn("Invalid token");
+        console.warn("Invalid token:", err.message);
       }
     }
     return { user };
