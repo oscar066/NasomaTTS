@@ -63,13 +63,7 @@ export const useDocumentUpload = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Initialize the mutation
-  const [createDocMutation] = useMutation(CREATE_DOC, {
-    context: {
-      headers: {
-        authorization: `Bearer ${session?.accessToken}`,
-      },
-    },
-  });
+  const [createDocMutation] = useMutation(CREATE_DOC);
 
   const uploadDocument = async (
     file: File
