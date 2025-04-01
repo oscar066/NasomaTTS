@@ -1,5 +1,7 @@
 import React from "react";
 import { useRouter } from "next/navigation";
+import { useMutation } from "@apollo/client";
+import { gql } from "@apollo/client";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { ChevronDown, Play } from "lucide-react";
@@ -9,9 +11,56 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 
-export function FileCard({ file }) {
+// Define the DELETE_DOCUMENT mutation
+const DELETE_DOCUMENT = gql`
+  mutation DeleteDocument($deleteDocumentId: ID!) {
+    deleteDocument(id: $deleteDocumentId)
+  }
+`;
+
+export function FileCard({ file, onDelete }) {
   const router = useRouter();
+
+  // Initialize the delete mutation
+  const [deleteDocument, { loading: deleteLoading }] = useMutation(
+    DELETE_DOCUMENT,
+    {
+      onCompleted: () => {
+        // Show success message with Sonner toast
+        toast("Document deleted", {
+          description: "The document has been successfully deleted.",
+        });
+
+        // Call the onDelete callback to refresh the document list
+        if (onDelete) {
+          onDelete(file.id);
+        }
+      },
+      onError: (error) => {
+        // Show error message with Sonner toast
+        toast.error("Error", {
+          description: `Failed to delete document: ${error.message}`,
+        });
+      },
+    }
+  );
+
+  // Function to handle document deletion
+  const handleDelete = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Confirm before deleting
+    if (window.confirm("Are you sure you want to delete this document?")) {
+      deleteDocument({
+        variables: {
+          deleteDocumentId: file.id,
+        },
+      });
+    }
+  };
 
   // Function to truncate content and add ellipsis
   const truncateContent = (content, maxLength = 100) => {
@@ -91,13 +140,10 @@ export function FileCard({ file }) {
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-red-600"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                alert("Delete functionality here");
-              }}
+              onClick={handleDelete}
+              disabled={deleteLoading}
             >
-              Delete
+              {deleteLoading ? "Deleting..." : "Delete"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
