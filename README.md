@@ -6,7 +6,19 @@
 
 Nasoma is an affordable,a text-to-speech application designed specifically for students. It enhances reading efficiency and engagement by converting written content to speech with synchronized text highlighting. The application makes educational content more accessible by providing a user-friendly interface for document management and audio playback.
 
-![Nasoma Screenshot](https://via.placeholder.com/800x400?text=Nasoma+Screenshot)
+### Application Screenshots
+
+#### Login Interface
+![Login Screen](login.png)
+*Secure authentication with email/password or social login options*
+
+#### User Dashboard
+![Dashboard](dashboard.png)
+*Document management interface with recently accessed files and upload options*
+
+#### Document Reader
+![Document Reader](documentReading.png)
+*Interactive reading interface with synchronized text highlighting and playback controls*
 
 ## ✨ Features
 
