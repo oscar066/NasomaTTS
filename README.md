@@ -131,7 +131,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📧 Contact
 
-Project Link: [https://github.com/yourusername/nasoma](https://github.com/yourusername/nasoma)
+Email: ["oscarkaruga1@gmail.com"]
 
 ---
 Made with ❤️ for students everywhere
