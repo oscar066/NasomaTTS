@@ -1,0 +1,52 @@
+services:
+  api:
+    build: ./fastapi
+    platform: linux/arm64
+    ports:
+      - "8000:8000"
+    env_file: ./fastapi/.env
+    environment:
+      - MONGODB_URL=mongodb://mongo:27017
+      - MINIO_ENDPOINT=minio:9000
+    depends_on:
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  mongo:
+    image: mongo:7
+    platform: linux/arm64
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  minio:
+    image: minio/minio
+    platform: linux/arm64
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    env_file: ./fastapi/.env
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongo_data:
+  minio_data:
