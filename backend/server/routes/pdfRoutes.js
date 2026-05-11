@@ -5,7 +5,7 @@ const multer = require("multer");
 const pdfParse = require("pdf-parse");
 const fs = require("fs");
 const path = require("path");
-const { authenticate } = require("../middleware/authenticate"); 
+const { minioClient, BUCKET, ensureBucket } = require("../services/minioClient");
 
 const router = express.Router();
 
@@ -22,30 +22,36 @@ const upload = multer({
 });
 
 // POST /api/pdf/upload
-
 router.post("/upload", upload.single("pdf"), async (req, res, next) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded" });
-  }
+  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+  const tempPath = req.file.path;
 
   try {
-    const dataBuffer = fs.readFileSync(req.file.path);
+    const dataBuffer = fs.readFileSync(tempPath);
     const pdfData = await pdfParse(dataBuffer);
 
-    // Clean up the file after processing
-    fs.unlink(req.file.path, (err) => {
-      if (err) console.error("Error deleting file:", err);
+    await ensureBucket();
+    const safeTitle = req.file.originalname.replace(/\s+/g, "_");
+    const fileKey = `${Date.now()}-${safeTitle}`;
+    await minioClient.fPutObject(BUCKET, fileKey, tempPath, {
+      "Content-Type": "application/pdf",
+    });
+
+    fs.unlink(tempPath, (err) => {
+      if (err) console.error("Error deleting temp file:", err);
     });
 
     res.json({
-      message: "PDF Document parsed saved successfully",
-      filePath: `/uploads/${req.file.filename}`,
+      message: "PDF parsed and uploaded successfully",
+      fileKey,
       title: req.file.originalname,
       content: pdfData.text,
     });
-    
   } catch (error) {
-    next(new Error("Error extracting text from PDF"));
+    console.error("PDF upload error:", error);
+    fs.unlink(tempPath, () => {});
+    next(new Error("Error processing PDF"));
   }
 });
 

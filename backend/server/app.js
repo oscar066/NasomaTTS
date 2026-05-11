@@ -6,7 +6,7 @@ const morgan = require("morgan");
 const helmet = require("helmet");
 const fs = require("fs");
 const path = require("path");
-const jwt = require("jsonwebtoken");
+const { jwtVerify } = require("jose");
 require("dotenv").config();
 
 const { connectDB, closeDB } = require("./db");
@@ -22,6 +22,7 @@ if (!fs.existsSync(uploadsDir)) {
 // Import route modules
 const pdfRoutes = require("./routes/pdfRoutes");
 const documentRoutes = require("./routes/documentRoutes");
+const documentsRoute = require("./routes/documents");
 const voiceRoutes = require("./routes/voiceRoutes");
 const speakRoutes = require("./routes/speakRoutes");
 
@@ -39,6 +40,7 @@ app.use(morgan("combined"));
 // Mount routes under an API namespace
 app.use("/api/pdf", pdfRoutes);
 app.use("/api/pdf", documentRoutes);
+app.use("/api/documents", documentsRoute);
 app.use("/api/voices", voiceRoutes);
 app.use("/api/speak", speakRoutes);
 
@@ -46,7 +48,7 @@ app.use("/api/speak", speakRoutes);
 const server = new ApolloServer({
   typeDefs,
   resolvers,
-  context: ({ req }) => {
+  context: async ({ req }) => {
     // Get token and remove "Bearer " prefix
     const authHeader = req.headers.authorization || "";
     const token = authHeader.replace("Bearer ", "");
@@ -54,7 +56,9 @@ const server = new ApolloServer({
     let user = null;
     if (token) {
       try {
-        user = jwt.verify(token, process.env.JWT_SECRET);
+        const secretKey = new TextEncoder().encode(process.env.JWT_SECRET);
+        const { payload } = await jwtVerify(token, secretKey);
+        user = payload;
       } catch (err) {
         console.warn("Invalid token:", err.message);
       }

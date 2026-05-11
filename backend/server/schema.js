@@ -5,6 +5,7 @@ const typeDefs = gql`
     id: ID!
     title: String!
     content: String!
+    fileKey: String
     author: User!
     createdAt: String!
     updatedAt: String!
@@ -29,7 +30,7 @@ const typeDefs = gql`
   }
 
   type Mutation {
-    createDoc(title: String!, content: String!): Document!
+    createDoc(title: String!, content: String!, fileKey: String): Document!
     deleteDocument(id: ID!): Boolean!
     signUp(username: String!, email: String!, password: String!): String!
     signIn(email: String!, password: String!): String!

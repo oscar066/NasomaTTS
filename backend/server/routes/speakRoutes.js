@@ -5,26 +5,17 @@ const { execFile } = require("child_process");
 const router = express.Router();
 
 router.get("/", (req, res) => {
-  const { text, voice } = req.query;
-  if (!text) {
-    return res.status(400).json({ error: "No text provided" });
-  }
+  const { text, voice, speed, startParagraph } = req.query;
+  if (!text) return res.status(400).json({ error: "No text provided" });
 
-  // Split the input text into paragraphs using one or more blank lines.
   const paragraphs = text.split(/\n\s*\n/).filter(Boolean);
-  let paragraphIndex = 0;
+  let paragraphIndex = Math.max(0, parseInt(startParagraph) || 0);
 
-  // Use the provided voice or fall back to a default.
   const selectedVoice = voice || "Karen";
-
-  // Speaking settings.
-  const wpm = 300;
-  const wordsPerSecond = wpm / 60;
-  const msPerWord = 1000 / wordsPerSecond;
-
-  // Define sliding window parameters (for highlighting words).
-  // Adjust to show more/less words in the sliding window.
-  const windowSize = 5;
+  const speedMultiplier = Math.max(0.5, Math.min(2, parseFloat(speed) || 1));
+  const wpm = Math.round(200 * speedMultiplier);
+  const msPerWord = 60000 / wpm;
+  const windowSize = 7;
 
   // Set up Server-Sent Events (SSE) headers.
   res.setHeader("Content-Type", "text/event-stream");

@@ -15,6 +15,7 @@ const documentSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    fileKey: { type: String, default: null },
   },
   {
     timestamps: true,

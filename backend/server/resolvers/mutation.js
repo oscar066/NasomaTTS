@@ -4,7 +4,7 @@ const {
   ForbiddenError,
 } = require("apollo-server-express");
 const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
+const { SignJWT, jwtVerify } = require("jose");
 const gravatar = require("gravatar");
 const Document = require("../models/document");
 const User = require("../models/user");
@@ -12,7 +12,7 @@ const { default: mongoose } = require("mongoose");
 
 const Mutation = {
   // Mutation for creating a document
-  createDoc: async (parent, { title, content }, context) => {
+  createDoc: async (parent, { title, content, fileKey }, context) => {
     // Check if user is authenticated
     if (!context.user) {
       throw new AuthenticationError(
@@ -41,7 +41,8 @@ const Mutation = {
     const newDocument = new Document({
       title,
       content,
-      author: user._id, // Use the user's _id directly
+      author: user._id,
+      ...(fileKey ? { fileKey } : {}),
     });
 
     try {
@@ -107,7 +108,10 @@ const Mutation = {
       if (!process.env.JWT_SECRET) {
         throw new Error("JWT_SECRET is not defined in environment variables.");
       }
-      return jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+      const secretKey = new TextEncoder().encode(process.env.JWT_SECRET);
+      return new SignJWT({ id: user._id.toString() })
+        .setProtectedHeader({ alg: "HS256" })
+        .sign(secretKey);
     } catch (err) {
       console.error("Error creating account:", err);
       throw new Error("Error creating account");
@@ -137,7 +141,10 @@ const Mutation = {
       throw new Error("JWT_SECRET is not defined in environment variables.");
     }
 
-    return jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+    const secretKey = new TextEncoder().encode(process.env.JWT_SECRET);
+    return new SignJWT({ id: user._id.toString() })
+      .setProtectedHeader({ alg: "HS256" })
+      .sign(secretKey);
   },
 };
 
