@@ -1,18 +1,24 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from .database import close_db, connect_db
+from .db.database import close_db, connect_db
 from .routes import auth, documents, pdf, speak, voices
 from .services.tts import tts_service
+from .utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Starting up NasomaTTS API")
     await connect_db()
     await tts_service.load()
+    logger.info("Startup complete")
     yield
+    logger.info("Shutting down NasomaTTS API")
     await close_db()
 
 
@@ -25,6 +31,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    response = await call_next(request)
+    logger.info("%s %s %s", request.method, request.url.path, response.status_code)
+    return response
+
 
 app.include_router(auth.router)
 app.include_router(documents.router)

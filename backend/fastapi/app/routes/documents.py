@@ -3,10 +3,12 @@ from datetime import datetime
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..database import get_db
+from ..db.database import get_db
 from ..deps import get_current_user
-from ..models.document import DocumentCreate
+from ..schemas.schema import DocumentCreate
+from ..utils.logger import setup_logger
 
+logger = setup_logger(__name__)
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
@@ -89,6 +91,7 @@ async def create_document(
             "updatedAt": now,
         }
     )
+    logger.info("Document created: id=%s title=%r user=%s", result.inserted_id, data.title, current_user["_id"])
     doc = await db.documents.find_one({"_id": result.inserted_id})
     return _fmt_doc(doc, _fmt_author(current_user))
 
@@ -102,13 +105,16 @@ async def delete_document(
     try:
         oid = ObjectId(doc_id)
     except Exception:
+        logger.warning("Invalid document ID in delete request: %s", doc_id)
         raise HTTPException(status_code=400, detail="Invalid document ID")
 
     doc = await db.documents.find_one({"_id": oid})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     if doc["author"] != current_user["_id"]:
+        logger.warning("Unauthorized delete attempt: user=%s doc=%s", current_user["_id"], doc_id)
         raise HTTPException(status_code=403, detail="Not authorized to delete this document")
 
     await db.documents.delete_one({"_id": oid})
+    logger.info("Document deleted: id=%s by user=%s", doc_id, current_user["_id"])
     return {"success": True}

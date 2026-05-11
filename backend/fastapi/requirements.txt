@@ -7,3 +7,4 @@ pymupdf==1.27.2.3
 python-dotenv==1.2.2
 pydantic-settings==2.14.0
 pydantic[email]==2.13.3
+colorama==0.4.6

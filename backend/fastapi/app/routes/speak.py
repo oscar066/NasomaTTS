@@ -5,22 +5,22 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
 from ..services.tts import tts_service
+from ..utils.logger import setup_logger
 
+logger = setup_logger(__name__)
 router = APIRouter(tags=["speak"])
 
 
 @router.get("/speak")
 async def speak(request: Request, text: str, voice: str = "dave", wpm: int = 150):
-    """
-    SSE stream of word-by-word timing events for text highlighting.
-    The client is responsible for audio playback (via /tts/audio or Web Speech API).
-    """
     if not text:
         raise HTTPException(status_code=400, detail="text is required")
 
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
     if not paragraphs:
         raise HTTPException(status_code=400, detail="No content to speak")
+
+    logger.info("SSE stream started: voice=%s wpm=%d paragraphs=%d", voice, wpm, len(paragraphs))
 
     ms_per_word = 60_000 / wpm
     window_size = 5
@@ -64,16 +64,14 @@ async def speak(request: Request, text: str, voice: str = "dave", wpm: int = 150
 
 @router.post("/tts/audio")
 async def generate_audio(text: str, voice: str = "dave"):
-    """
-    Generate WAV audio with NeuTTS Air and return the bytes.
-    Returns a JSON fallback hint when NeuTTS is unavailable so the
-    client can switch to the Web Speech API automatically.
-    """
     if not tts_service.available:
+        logger.info("TTS audio requested but NeuTTS unavailable — returning fallback hint")
         return {"tts_available": False, "fallback": "web_speech_api"}
 
     audio_bytes = await tts_service.synthesize(text, voice)
     if audio_bytes is None:
+        logger.error("TTS synthesis returned None for voice=%s", voice)
         raise HTTPException(status_code=500, detail="Audio generation failed")
 
+    logger.info("TTS audio generated: voice=%s bytes=%d", voice, len(audio_bytes))
     return Response(content=audio_bytes, media_type="audio/wav")

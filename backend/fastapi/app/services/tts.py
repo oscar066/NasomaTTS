@@ -1,10 +1,11 @@
 import asyncio
 import io
-import logging
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+from ..utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 SAMPLES_DIR = Path(__file__).parent.parent.parent / "samples"
 
