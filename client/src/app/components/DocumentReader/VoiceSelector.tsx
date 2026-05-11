@@ -1,5 +1,3 @@
-// components/VoiceSelector.tsx
-
 import React from "react";
 import {
   Select,
@@ -8,18 +6,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Voice } from "@/lib/api";
 
 interface VoiceSelectorProps {
   voice: string;
-  voices: string[];
+  voices: Voice[];
   onChange: (voice: string) => void;
 }
 
-const VoiceSelector: React.FC<VoiceSelectorProps> = ({
-  voice,
-  voices,
-  onChange,
-}) => {
+const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voice, voices, onChange }) => {
   return (
     <div className="flex items-center gap-4">
       <label htmlFor="voiceSelect" className="text-lg min-w-[100px]">
@@ -31,8 +26,8 @@ const VoiceSelector: React.FC<VoiceSelectorProps> = ({
         </SelectTrigger>
         <SelectContent>
           {voices.map((v) => (
-            <SelectItem key={v} value={v}>
-              {v}
+            <SelectItem key={v.id} value={v.id}>
+              {v.label}
             </SelectItem>
           ))}
         </SelectContent>

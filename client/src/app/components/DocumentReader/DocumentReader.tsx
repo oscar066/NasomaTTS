@@ -1,25 +1,27 @@
 "use client";
 
 import React from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  AlertCircle,
-  Volume2,
-  Settings,
-  ChevronUp,
-  ChevronDown,
-  ChevronLeft,
-} from "lucide-react";
+import { ChevronLeft, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import NasomaLogo from "../Logo/nasoma-logo";
-import DocumentContent from "./DocumentContent";
-import VoiceSelector from "./VoiceSelector";
-import SpeedSlider from "./SpeedSlider";
-import PlaybackControls from "./PlaybackControls";
+import TTSOverlay from "./TTSOverlay";
 import { useDocumentReader } from "@/hooks/useDocumentReader";
+
+// Load the PDF viewer client-side only (it uses browser APIs)
+const PDFViewer = dynamic(() => import("./PDFViewer"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex flex-col items-center justify-center h-64 text-gray-400 bg-gray-100">
+      <div className="animate-pulse text-sm">Loading PDF viewer…</div>
+    </div>
+  ),
+});
+
+const OVERLAY_HEIGHT = 160; // px — keep in sync with TTSOverlay height
 
 const DocumentReader: React.FC = () => {
   const router = useRouter();
@@ -28,6 +30,7 @@ const DocumentReader: React.FC = () => {
       docName,
       text,
       paragraphs,
+      pdfUrl,
       currentParagraphIndex,
       currentWordIndex,
       wordWindow,
@@ -43,159 +46,123 @@ const DocumentReader: React.FC = () => {
     setSpeed,
     handlePlay,
     handleStop,
+    skipToParagraph,
   } = useDocumentReader();
-
-  const [controlsExpanded, setControlsExpanded] = React.useState(true);
-  const totalParagraphs = paragraphs?.length || 0;
-  const progress = totalParagraphs
-    ? (currentParagraphIndex / totalParagraphs) * 100
-    : 0;
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
-        <div className="mb-6">
-          <NasomaLogo size="md" showPulse={true} />
-        </div>
-        <h2 className="text-xl font-medium mb-2">Loading document</h2>
-        <Progress value={45} className="w-64" />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
+        <NasomaLogo size="md" showPulse />
+        <p className="text-gray-500 text-sm">Loading document…</p>
+        <Progress value={45} className="w-56" />
       </div>
     );
   }
 
-  const toggleControls = () => {
-    setControlsExpanded(!controlsExpanded);
-  };
-
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      {/* Sticky Header */}
-      <header className="sticky top-0 bg-white shadow-sm z-10">
-        <div className="max-w-5xl mx-auto w-full px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mr-2 -ml-2"
-              onClick={() => router.push("/dashboard")}
-            >
-              <ChevronLeft className="h-5 w-5" />
-              <span className="sr-only">Back to Dashboard</span>
-            </Button>
-
-            <div className="flex items-center gap-2 group">
-              <NasomaLogo size="sm" showPulse={true} />
-              <span className="hidden md:inline text-gray-300 mx-2">|</span>
-              <h1 className="text-xl font-semibold truncate hidden md:block">
-                {docName || "Untitled Document"}
-              </h1>
-            </div>
-          </div>
-
+    <div className="min-h-screen flex flex-col bg-gray-100">
+      {/* Minimal sticky header */}
+      <header className="sticky top-0 z-20 bg-white border-b border-gray-200 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 py-2 flex items-center gap-3">
           <Button
             variant="ghost"
             size="sm"
-            className="flex items-center gap-1"
-            onClick={toggleControls}
+            className="-ml-2"
+            onClick={() => router.push("/dashboard")}
           >
-            <Settings className="h-4 w-4" />
-            <span className="hidden sm:inline">Controls</span>
-            {controlsExpanded ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronUp className="h-4 w-4" />
-            )}
+            <ChevronLeft className="h-4 w-4" />
+            <span className="sr-only">Back</span>
           </Button>
+          <NasomaLogo size="sm" showPulse={isPlaying} />
+          <h1 className="text-base font-semibold text-gray-800 truncate flex-1">
+            {docName || "Untitled Document"}
+          </h1>
         </div>
-        <Progress value={progress} className="h-1" />
       </header>
 
-      {/* Mobile document title */}
-      <div className="md:hidden bg-white px-4 py-2 border-b border-gray-100">
-        <h2 className="text-lg font-medium text-gray-700 truncate">
-          {docName || "Untitled Document"}
-        </h2>
-      </div>
-
-      {/* Main Content */}
-      <main className="flex-1 mx-auto max-w-5xl w-full p-4 pb-32">
-        {error && (
-          <Alert variant="destructive" className="mb-6">
+      {/* Error banner */}
+      {error && (
+        <div className="max-w-3xl mx-auto w-full px-4 pt-4">
+          <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
-        )}
+        </div>
+      )}
 
-        {text ? (
-          <DocumentContent
-            paragraphs={paragraphs}
-            currentParagraphIndex={currentParagraphIndex}
-            wordWindow={wordWindow}
-            windowStart={windowStart}
-            currentWordIndex={currentWordIndex}
-          />
+      {/* Main content — PDF viewer or text fallback */}
+      <main className="flex-1">
+        {pdfUrl ? (
+          <PDFViewer url={pdfUrl} bottomOffset={OVERLAY_HEIGHT} />
+        ) : text ? (
+          // Text-only fallback (documents without a stored PDF)
+          <div
+            className="overflow-y-auto px-6 py-6"
+            style={{ height: `calc(100vh - 52px - ${OVERLAY_HEIGHT}px)` }}
+          >
+            <div className="max-w-3xl mx-auto space-y-4">
+              {paragraphs.map((para, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => skipToParagraph(idx)}
+                  className={`p-4 rounded-lg leading-relaxed text-base cursor-pointer transition-colors ${
+                    idx === currentParagraphIndex
+                      ? "bg-blue-50 border-l-4 border-blue-400"
+                      : "hover:bg-gray-50"
+                  }`}
+                >
+                  {idx === currentParagraphIndex && wordWindow.length > 0 ? (
+                    <p>
+                      {para.split(/\s+/).filter(Boolean).map((word, wIdx) => (
+                        <React.Fragment key={wIdx}>
+                          <span
+                            className={
+                              wIdx === currentWordIndex
+                                ? "bg-yellow-300 rounded px-0.5 font-semibold"
+                                : wIdx < currentWordIndex
+                                ? "text-gray-400"
+                                : ""
+                            }
+                          >
+                            {word}
+                          </span>{" "}
+                        </React.Fragment>
+                      ))}
+                    </p>
+                  ) : (
+                    <p>{para}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         ) : (
-          <Card className="border border-dashed border-gray-300 bg-gray-50">
-            <CardContent className="flex flex-col items-center justify-center p-12 text-gray-500">
-              <AlertCircle className="h-10 w-10 mb-4" />
-              <h3 className="text-lg font-medium mb-2">No document loaded</h3>
-              <p className="text-center text-sm">
-                Select a document to begin reading
-              </p>
-            </CardContent>
-          </Card>
+          <div className="flex flex-col items-center justify-center h-64 text-gray-400 gap-2">
+            <AlertCircle className="h-8 w-8" />
+            <p>No document loaded</p>
+          </div>
         )}
       </main>
 
-      {/* Floating Controls */}
-      <footer
-        className={`fixed bottom-0 left-0 right-0 flex justify-center z-10 transition-all duration-300 ${
-          !controlsExpanded ? "translate-y-full" : ""
-        }`}
-      >
-        <Card className="shadow-lg border-t border-gray-200 rounded-t-lg rounded-b-none max-w-5xl w-full mx-auto">
-          <div className="absolute -top-8 left-0 right-0 flex justify-center">
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-full h-8 w-8 p-0 shadow-md bg-white hover:bg-gray-100"
-              onClick={toggleControls}
-            >
-              {controlsExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronUp className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-
-          <CardContent className="p-4">
-            <div className="flex flex-wrap gap-4">
-              <div className="flex items-center gap-2 min-w-fit">
-                <Volume2 className="h-4 w-4 text-gray-500" />
-                <VoiceSelector
-                  voice={voice}
-                  voices={voices}
-                  onChange={setVoice}
-                />
-              </div>
-
-              <div className="flex-1 min-w-64">
-                <SpeedSlider speed={speed} onChange={setSpeed} />
-              </div>
-
-              <div className="w-full sm:w-auto">
-                <PlaybackControls
-                  isPlaying={isPlaying}
-                  onPlay={handlePlay}
-                  onStop={handleStop}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </footer>
+      {/* Speechify-style TTS overlay */}
+      <TTSOverlay
+        isPlaying={isPlaying}
+        currentParagraphIndex={currentParagraphIndex}
+        totalParagraphs={paragraphs.length}
+        currentWordIndex={currentWordIndex}
+        wordWindow={wordWindow}
+        windowStart={windowStart}
+        voice={voice}
+        voices={voices}
+        speed={speed}
+        onPlay={handlePlay}
+        onStop={handleStop}
+        onPrevParagraph={() => skipToParagraph(currentParagraphIndex - 1)}
+        onNextParagraph={() => skipToParagraph(currentParagraphIndex + 1)}
+        onVoiceChange={setVoice}
+        onSpeedChange={setSpeed}
+      />
     </div>
   );
 };

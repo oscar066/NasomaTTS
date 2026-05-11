@@ -1,33 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { TopBar } from "./TopBar";
 import { FileCard } from "./FileCard";
 import Sidebar from "./SideBar";
 import { useRouter } from "next/navigation";
-import { useQuery, gql } from "@apollo/client";
 import { useSession } from "next-auth/react";
-
-// get documents by author
-const GET_DOCUMENTS_BY_AUTHOR = gql`
-  query DocumentsByAuthor($email: String!) {
-    documentsByAuthor(email: $email) {
-      id
-      title
-      content
-      author {
-        id
-        username
-        email
-      }
-      createdAt
-    }
-  }
-`;
+import { documentsApi } from "@/lib/api";
 
 export default function Dashboard() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [documents, setDocuments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   const { data: session, status } = useSession({
     required: true,
     onUnauthenticated() {
@@ -35,23 +22,32 @@ export default function Dashboard() {
     },
   });
 
-  const userEmail = session?.user?.email;
+  useEffect(() => {
+    if (status !== "authenticated" || !session?.user?.email) return;
 
-  const { loading, error, data } = useQuery(GET_DOCUMENTS_BY_AUTHOR, {
-    variables: { email: userEmail },
-    skip: !userEmail,
-    fetchPolicy: "network-only",
-    onError: (error) => {
-      console.log("GraphQL Error:", error);
-      if (error.message.toLowerCase().includes("unauthorized")) {
-        router.push("/auth/login");
+    const fetchDocs = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const docs = await documentsApi.byAuthor(
+          session.user.email,
+          session.accessToken
+        );
+        setDocuments(docs);
+      } catch (err) {
+        setError(err.message || "Failed to load documents");
+        if (err.message?.toLowerCase().includes("unauthorized")) {
+          router.push("/auth/login");
+        }
+      } finally {
+        setLoading(false);
       }
-    },
-  });
+    };
 
-  const toggleSidebar = () => {
-    setSidebarOpen((prev) => !prev);
-  };
+    fetchDocs();
+  }, [status, session]);
+
+  const toggleSidebar = () => setSidebarOpen((prev) => !prev);
 
   if (status === "loading") {
     return (
@@ -69,8 +65,6 @@ export default function Dashboard() {
     );
   }
 
-  // console.log("Here is the data", data);
-
   return (
     <div className="flex h-screen bg-gray-100">
       <Sidebar isOpen={sidebarOpen} />
@@ -83,19 +77,17 @@ export default function Dashboard() {
               className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6"
               role="alert"
             >
-              <p>Error loading documents: {error.message}</p>
+              <p>Error loading documents: {error}</p>
             </div>
           )}
-          {!error &&
-            (!data?.documentsByAuthor ||
-              data.documentsByAuthor.length === 0) && (
-              <p className="text-gray-600">
-                No documents found. Upload a document to get started.
-              </p>
-            )}
-          {data?.documentsByAuthor && data.documentsByAuthor.length > 0 && (
+          {!error && documents.length === 0 && (
+            <p className="text-gray-600">
+              No documents found. Upload a document to get started.
+            </p>
+          )}
+          {documents.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {data.documentsByAuthor.map((doc) => (
+              {documents.map((doc) => (
                 <FileCard key={doc.id} file={doc} />
               ))}
             </div>
@@ -105,5 +97,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-// export default dynamic(() => Promise.resolve(Dashboard), { ssr: false });

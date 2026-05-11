@@ -1,7 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "@apollo/client";
-import { gql } from "@apollo/client";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { ChevronDown, Play } from "lucide-react";
@@ -12,53 +11,32 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-
-// Define the DELETE_DOCUMENT mutation
-const DELETE_DOCUMENT = gql`
-  mutation DeleteDocument($deleteDocumentId: ID!) {
-    deleteDocument(id: $deleteDocumentId)
-  }
-`;
+import { documentsApi } from "@/lib/api";
 
 export function FileCard({ file, onDelete }) {
   const router = useRouter();
+  const { data: session } = useSession();
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Initialize the delete mutation
-  const [deleteDocument, { loading: deleteLoading }] = useMutation(
-    DELETE_DOCUMENT,
-    {
-      onCompleted: () => {
-        // Show success message with Sonner toast
-        toast("Document deleted", {
-          description: "The document has been successfully deleted.",
-        });
-
-        // Call the onDelete callback to refresh the document list
-        if (onDelete) {
-          onDelete(file.id);
-        }
-      },
-      onError: (error) => {
-        // Show error message with Sonner toast
-        toast.error("Error", {
-          description: `Failed to delete document: ${error.message}`,
-        });
-      },
-    }
-  );
-
-  // Function to handle document deletion
-  const handleDelete = (e) => {
+  const handleDelete = async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // Confirm before deleting
-    if (window.confirm("Are you sure you want to delete this document?")) {
-      deleteDocument({
-        variables: {
-          deleteDocumentId: file.id,
-        },
+    if (!window.confirm("Are you sure you want to delete this document?")) return;
+
+    try {
+      setDeleteLoading(true);
+      await documentsApi.delete(file.id, session?.accessToken);
+      toast("Document deleted", {
+        description: "The document has been successfully deleted.",
       });
+      if (onDelete) onDelete(file.id);
+    } catch (error) {
+      toast.error("Error", {
+        description: `Failed to delete document: ${error.message}`,
+      });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 

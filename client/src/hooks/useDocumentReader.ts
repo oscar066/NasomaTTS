@@ -1,14 +1,7 @@
-// hooks/useDocumentReader.ts
-
 import { useState, useEffect, useRef } from "react";
-import axios from "axios";
 import { useParams, useSearchParams } from "next/navigation";
-
-export interface DocumentData {
-  id: string;
-  title: string;
-  content: string;
-}
+import { documentsApi, voicesApi, speakUrl, Voice } from "@/lib/api";
+import { useSession } from "next-auth/react";
 
 export interface ReaderState {
   docName: string;
@@ -19,23 +12,20 @@ export interface ReaderState {
   wordWindow: string[];
   windowStart: number;
   voice: string;
-  voices: string[];
+  voices: Voice[];
+  ttsAvailable: boolean;
   isPlaying: boolean;
   speed: number;
   loading: boolean;
   error: string;
 }
 
-export const useDocumentReader = (): {
-  state: ReaderState;
-  setVoice: (voice: string) => void;
-  setSpeed: (speed: number) => void;
-  handlePlay: () => void;
-  handleStop: () => void;
-} => {
+export const useDocumentReader = () => {
   const params = useParams();
   const documentId = params?.documentId as string;
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
+
   const [state, setState] = useState<ReaderState>({
     docName: "",
     text: "",
@@ -46,223 +36,204 @@ export const useDocumentReader = (): {
     windowStart: 0,
     voice: "",
     voices: [],
+    ttsAvailable: false,
     isPlaying: false,
     speed: 1,
     loading: true,
     error: "",
   });
+
+  const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
+
   const eventSourceRef = useRef<EventSource | null>(null);
-  const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
-  // Helper to update state fields
-  const updateState = (updates: Partial<ReaderState>) => {
-    setState((prev) => ({ ...prev, ...updates }));
-  };
+  const update = (patch: Partial<ReaderState>) =>
+    setState((prev) => ({ ...prev, ...patch }));
 
-  const fetchDocument = async (id: string): Promise<void> => {
-    try {
-      const response = await axios.get<{ title: string; text: string }>(
-        `${API_BASE_URL}/documents/${id}`
-      );
-
-      const documentTitle = response.data.title;
-      const documentText = response.data.text;
-
-      localStorage.setItem(
-        "currentDocument",
-        JSON.stringify({ id, title: documentTitle, content: documentText })
-      );
-
-      updateState({
-        docName: documentTitle,
-        text: documentText,
-        paragraphs: documentText.split(/\n\s*\n/).filter(Boolean),
-        loading: false,
-      });
-    } catch (error) {
-      console.error("Error fetching document:", error);
-      updateState({
-        error: "Failed to load document. Please try again later.",
-        loading: false,
-      });
-    }
+  const getBrowserVoices = (): Voice[] => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return [];
+    const bv = window.speechSynthesis.getVoices();
+    return bv.length > 0
+      ? bv.map((v) => ({ id: v.voiceURI, label: v.name }))
+      : [{ id: "browser-default", label: "Browser TTS" }];
   };
 
   const fetchVoices = async () => {
     try {
-      const response = await axios.get<{ voices: string[] }>(
-        `${API_BASE_URL}/voices`
-      );
+      const { voices, tts_available } = await voicesApi.list();
+      if (tts_available && voices.length > 0) {
+        update({ voices, voice: voices[0].id, ttsAvailable: true, error: "" });
+        return;
+      }
+    } catch {
+      // fall through to browser fallback
+    }
 
-      const availableVoices = response.data.voices;
+    // NeuTTS unavailable — use browser speechSynthesis
+    const loadBrowser = () => {
+      const bv = getBrowserVoices();
+      update({
+        voices: bv,
+        voice: bv[0]?.id ?? "",
+        ttsAvailable: false,
+        error: "",
+      });
+    };
 
-      updateState({
-        voices: availableVoices,
-        voice: availableVoices.length > 0 ? availableVoices[0] : "karen",
-        error:
-          availableVoices.length === 0
-            ? "No voices available. Text-to-speech may not be available."
-            : "",
-      });
-    } catch (error) {
-      console.error("Error fetching voices:", error);
-      updateState({
-        error: "Failed to load voices. Text-to-speech may not work properly.",
-      });
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      // getVoices() may be empty until the voiceschanged event fires
+      if (window.speechSynthesis.getVoices().length > 0) {
+        loadBrowser();
+      } else {
+        window.speechSynthesis.onvoiceschanged = () => {
+          loadBrowser();
+          window.speechSynthesis.onvoiceschanged = null;
+        };
+        // Fallback if event never fires
+        setTimeout(loadBrowser, 1000);
+      }
+    } else {
+      update({ error: "No TTS available in this browser." });
     }
   };
 
-  // Function to handle autoplay
-  const checkAndAutoplay = () => {
-    const shouldAutoplay = searchParams.get("autoplay") === "true";
-    if (shouldAutoplay && state.voices.length > 0 && !state.isPlaying) {
-      setTimeout(handlePlay, 1000);
-    }
-  };
-
-  // Effect to initialize document and voices
   useEffect(() => {
-    const initializeDocument = async () => {
-      updateState({ loading: true, error: "" });
+    if (!documentId) {
+      update({ error: "No document ID provided.", loading: false });
+      return;
+    }
+
+    const init = async () => {
+      update({ loading: true, error: "" });
 
       try {
-        // 1. Check the localStorage first
-        const storedDocument = localStorage.getItem("currentDocument");
-        if (storedDocument) {
-          const parsedDoc = JSON.parse(storedDocument);
-          if (parsedDoc.id === documentId) {
-            // use local storage data
-            updateState({
-              docName: parsedDoc.title,
-              text: parsedDoc.content,
-              paragraphs: parsedDoc.content.split(/\n\s*\n/).filter(Boolean),
+        // Check localStorage cache first
+        const cached = localStorage.getItem("currentDocument");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed.id === documentId) {
+            update({
+              docName: parsed.title,
+              text: parsed.content,
+              paragraphs: parsed.content.split(/\n\s*\n/).filter(Boolean),
             });
             await fetchVoices();
-            updateState({ loading: false });
-            checkAndAutoplay();
+            update({ loading: false });
             return;
           }
         }
 
-        // 2. If not in localStorage, fetch from server
-        if (typeof documentId === "string") {
-          await fetchDocument(documentId);
-          await fetchVoices();
-          checkAndAutoplay();
-        } else {
-          updateState({
-            error: "No document ID provided.",
-            loading: false,
+        const doc = await documentsApi.get(documentId, session?.accessToken);
+        localStorage.setItem(
+          "currentDocument",
+          JSON.stringify({ id: doc.id, title: doc.title, content: doc.content })
+        );
+        update({
+          docName: doc.title,
+          text: doc.content,
+          paragraphs: doc.content.split(/\n\s*\n/).filter(Boolean),
+        });
+        await fetchVoices();
+      } catch (err: any) {
+        update({ error: err.message || "Failed to load document." });
+      } finally {
+        update({ loading: false });
+      }
+    };
+
+    init();
+
+    return () => eventSourceRef.current?.close();
+  }, [documentId]);
+
+  // Auto-play when voices are ready and the URL says so
+  useEffect(() => {
+    if (
+      searchParams.get("autoplay") === "true" &&
+      state.voices.length > 0 &&
+      !state.isPlaying &&
+      state.text
+    ) {
+      const t = setTimeout(handlePlay, 1000);
+      return () => clearTimeout(t);
+    }
+  }, [state.voices, state.text]);
+
+  const startSseStream = (text: string, voice: string, speed: number, paragraphOffset = 0) => {
+    eventSourceRef.current?.close();
+    const wpm = Math.round(150 * speed);
+    const url = speakUrl(text, voice, wpm);
+    const es = new EventSource(url);
+    eventSourceRef.current = es;
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.done) { handleStop(); return; }
+        if (data.newParagraph) {
+          update({
+            currentParagraphIndex: paragraphOffset + data.paragraphIndex,
+            currentWordIndex: -1,
+            wordWindow: [],
+            windowStart: 0,
           });
         }
-      } catch (err) {
-        console.error("Error initializing document:", err);
-        updateState({
-          error: "Failed to load document. Please try again later.",
-          loading: false,
-        });
+        if (data.wordWindow) {
+          update({
+            wordWindow: data.wordWindow,
+            windowStart: data.windowStart,
+            currentWordIndex: data.currentWordIndex,
+          });
+        }
+      } catch {
+        update({ error: "Error processing TTS data." });
+        handleStop();
       }
     };
 
-    if (documentId) {
-      initializeDocument();
-    } else {
-      updateState({
-        error: "No document ID provided.",
-        loading: false,
-      });
+    es.onerror = () => {
+      update({ error: "Connection to TTS service failed." });
+      handleStop();
+    };
+  };
+
+  const startBrowserAudio = (text: string, voiceURI: string, speed: number) => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = speed;
+    if (voiceURI !== "browser-default") {
+      const match = window.speechSynthesis.getVoices().find((v) => v.voiceURI === voiceURI);
+      if (match) utterance.voice = match;
     }
-
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-    };
-  }, [documentId, searchParams]);
+    utterance.onend = () => handleStop();
+    synthRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+  };
 
   const handlePlay = () => {
-    if (!state.text.trim() || !state.voice) {
-      updateState({
-        error: !state.text.trim()
-          ? "No text to read."
-          : "Please select a voice before playing.",
-      });
-      return;
-    }
+    if (!state.text.trim()) { update({ error: "No text to read." }); return; }
+    if (!state.voice) { update({ error: "Please select a voice before playing." }); return; }
 
-    updateState({ error: "", isPlaying: true });
+    update({ error: "", isPlaying: true });
 
-    const url = `${API_BASE_URL}/speak?voice=${encodeURIComponent(
-      state.voice
-    )}&text=${encodeURIComponent(state.text)}&speed=${state.speed}`;
-
-    // Close existing connection
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
-
-    // Check if EventSource is available (it's not in SSR)
-    if (typeof EventSource === "undefined") {
-      updateState({
-        error: "Text-to-speech is not supported in your browser.",
-        isPlaying: false,
-      });
-      return;
-    }
-
-    try {
-      eventSourceRef.current = new EventSource(url);
-
-      eventSourceRef.current.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.done) {
-            handleStop();
-            return;
-          }
-          if (data.newParagraph) {
-            updateState({
-              currentParagraphIndex: data.paragraphIndex,
-              currentWordIndex: -1,
-              wordWindow: [],
-              windowStart: 0,
-            });
-          }
-          if (data.wordWindow) {
-            updateState({
-              wordWindow: data.wordWindow,
-              windowStart: data.windowStart,
-              currentWordIndex: data.currentWordIndex,
-            });
-          }
-        } catch (err) {
-          console.error("Error parsing SSE data:", err);
-          updateState({ error: "Error processing text-to-speech data." });
-          handleStop();
-        }
-      };
-
-      eventSourceRef.current.onerror = (error) => {
-        console.error("EventSource failed:", error);
-        updateState({ error: "Connection to text-to-speech service failed." });
-        handleStop();
-      };
-    } catch (err) {
-      console.error("Error creating EventSource:", err);
-      updateState({
-        error: "Failed to connect to text-to-speech service.",
-        isPlaying: false,
-      });
+    if (state.ttsAvailable) {
+      startSseStream(state.text, state.voice, state.speed);
+    } else {
+      // Browser TTS: SSE for word highlighting + Web Speech API for audio
+      startSseStream(state.text, state.voice, state.speed);
+      startBrowserAudio(state.text, state.voice, state.speed);
     }
   };
 
   const handleStop = () => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
-    updateState({
+    synthRef.current = null;
+    update({
       isPlaying: false,
       currentParagraphIndex: -1,
       currentWordIndex: -1,
@@ -271,11 +242,35 @@ export const useDocumentReader = (): {
     });
   };
 
+  const skipToParagraph = (index: number) => {
+    setState((prev) => {
+      if (index < 0 || index >= prev.paragraphs.length) return prev;
+
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
+
+      if (prev.isPlaying && prev.voice) {
+        const textFromIndex = prev.paragraphs.slice(index).join("\n\n");
+        startSseStream(textFromIndex, prev.voice, prev.speed, index);
+        if (!prev.ttsAvailable) startBrowserAudio(textFromIndex, prev.voice, prev.speed);
+      }
+
+      return {
+        ...prev,
+        currentParagraphIndex: index,
+        currentWordIndex: -1,
+        wordWindow: [],
+        windowStart: 0,
+      };
+    });
+  };
+
   return {
     state,
-    setVoice: (voice: string) => updateState({ voice }),
-    setSpeed: (speed: number) => updateState({ speed }),
+    setVoice: (voice: string) => update({ voice }),
+    setSpeed: (speed: number) => update({ speed }),
     handlePlay,
     handleStop,
+    skipToParagraph,
   };
 };
