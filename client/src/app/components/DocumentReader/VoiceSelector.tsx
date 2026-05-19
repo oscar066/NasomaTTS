@@ -16,12 +16,12 @@ interface VoiceSelectorProps {
 
 const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voice, voices, onChange }) => {
   return (
-    <div className="flex items-center gap-4">
-      <label htmlFor="voiceSelect" className="text-lg min-w-[100px]">
-        Voice:
+    <div className="flex items-center gap-3">
+      <label htmlFor="voiceSelect" className="text-sm font-medium text-foreground min-w-[60px]">
+        Voice
       </label>
       <Select value={voice} onValueChange={onChange}>
-        <SelectTrigger className="w-[180px]">
+        <SelectTrigger id="voiceSelect" className="w-48">
           <SelectValue placeholder="Select a voice" />
         </SelectTrigger>
         <SelectContent>

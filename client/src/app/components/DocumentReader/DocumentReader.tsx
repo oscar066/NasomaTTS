@@ -1,36 +1,38 @@
 "use client";
 
-import React from "react";
+import React, { useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, AlertCircle } from "lucide-react";
+import { ChevronLeft, AlertCircle, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
 import NasomaLogo from "../Logo/nasoma-logo";
 import TTSOverlay from "./TTSOverlay";
 import { useDocumentReader } from "@/hooks/useDocumentReader";
 
-// Load the PDF viewer client-side only (it uses browser APIs)
 const PDFViewer = dynamic(() => import("./PDFViewer"), {
   ssr: false,
   loading: () => (
-    <div className="flex flex-col items-center justify-center h-64 text-gray-400 bg-gray-100">
-      <div className="animate-pulse text-sm">Loading PDF viewer…</div>
+    <div className="flex flex-col items-center justify-center h-64 text-muted-foreground bg-secondary/30 animate-pulse">
+      <span className="text-sm">Loading PDF viewer…</span>
     </div>
   ),
 });
 
-const OVERLAY_HEIGHT = 160; // px — keep in sync with TTSOverlay height
+// Height of the fixed TTS overlay — keep in sync with TTSOverlay
+const OVERLAY_HEIGHT = 160;
+// Height of the sticky header
+const HEADER_HEIGHT = 56; // h-14
 
 const DocumentReader: React.FC = () => {
   const router = useRouter();
+  const contentRef = useRef<HTMLDivElement>(null);
+
   const {
     state: {
       docName,
       text,
       paragraphs,
-      pdfUrl,
       currentParagraphIndex,
       currentWordIndex,
       wordWindow,
@@ -51,33 +53,49 @@ const DocumentReader: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
         <NasomaLogo size="md" showPulse />
-        <p className="text-gray-500 text-sm">Loading document…</p>
-        <Progress value={45} className="w-56" />
+        <p className="text-muted-foreground text-sm">Loading document…</p>
+        <div className="w-56 h-1.5 bg-secondary rounded-full overflow-hidden">
+          <div className="h-full w-1/2 bg-gradient-to-r from-primary to-purple-600 rounded-full animate-pulse" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-100">
-      {/* Minimal sticky header */}
-      <header className="sticky top-0 z-20 bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-2 flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="-ml-2"
-            onClick={() => router.push("/dashboard")}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            <span className="sr-only">Back</span>
-          </Button>
-          <NasomaLogo size="sm" showPulse={isPlaying} />
-          <h1 className="text-base font-semibold text-gray-800 truncate flex-1">
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Sticky header — h-14 to match dashboard */}
+      <header className="sticky top-0 z-20 h-14 flex items-center bg-background border-b border-border px-4 gap-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:text-foreground -ml-1 flex-shrink-0"
+          onClick={() => router.push("/dashboard")}
+        >
+          <ChevronLeft className="h-4 w-4 mr-1" />
+          Back
+        </Button>
+
+        <div className="w-px h-5 bg-border flex-shrink-0" />
+
+        <NasomaLogo size="sm" showPulse={isPlaying} />
+
+        <div className="w-px h-5 bg-border flex-shrink-0" />
+
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <h1 className="text-sm font-semibold text-foreground truncate">
             {docName || "Untitled Document"}
           </h1>
         </div>
+
+        {isPlaying && (
+          <div className="flex items-center gap-1.5 flex-shrink-0 text-xs text-primary font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            Playing
+          </div>
+        )}
       </header>
 
       {/* Error banner */}
@@ -91,61 +109,75 @@ const DocumentReader: React.FC = () => {
         </div>
       )}
 
-      {/* Main content — PDF viewer or text fallback */}
+      {/* Main content */}
       <main className="flex-1">
-        {pdfUrl ? (
-          <PDFViewer url={pdfUrl} bottomOffset={OVERLAY_HEIGHT} />
-        ) : text ? (
-          // Text-only fallback (documents without a stored PDF)
+        {text ? (
           <div
-            className="overflow-y-auto px-6 py-6"
-            style={{ height: `calc(100vh - 52px - ${OVERLAY_HEIGHT}px)` }}
+            ref={contentRef}
+            className="overflow-y-auto px-4 sm:px-8 py-6"
+            style={{ height: `calc(100vh - ${HEADER_HEIGHT}px - ${OVERLAY_HEIGHT}px)` }}
           >
-            <div className="max-w-3xl mx-auto space-y-4">
-              {paragraphs.map((para, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => skipToParagraph(idx)}
-                  className={`p-4 rounded-lg leading-relaxed text-base cursor-pointer transition-colors ${
-                    idx === currentParagraphIndex
-                      ? "bg-blue-50 border-l-4 border-blue-400"
-                      : "hover:bg-gray-50"
-                  }`}
-                >
-                  {idx === currentParagraphIndex && wordWindow.length > 0 ? (
-                    <p>
-                      {para.split(/\s+/).filter(Boolean).map((word, wIdx) => (
-                        <React.Fragment key={wIdx}>
-                          <span
-                            className={
-                              wIdx === currentWordIndex
-                                ? "bg-yellow-300 rounded px-0.5 font-semibold"
-                                : wIdx < currentWordIndex
-                                ? "text-gray-400"
-                                : ""
-                            }
-                          >
-                            {word}
-                          </span>{" "}
-                        </React.Fragment>
-                      ))}
-                    </p>
-                  ) : (
-                    <p>{para}</p>
-                  )}
-                </div>
-              ))}
+            <div className="max-w-2xl mx-auto space-y-2">
+              {paragraphs.map((para, idx) => {
+                const isActive = idx === currentParagraphIndex;
+                const words = para.split(/\s+/).filter(Boolean);
+
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => skipToParagraph(idx)}
+                    className={`
+                      group px-4 py-3 rounded-xl leading-relaxed text-base cursor-pointer
+                      transition-all duration-200 border
+                      ${isActive
+                        ? "bg-primary/5 border-primary/20 shadow-sm"
+                        : "border-transparent hover:bg-secondary/60 hover:border-border"
+                      }
+                    `}
+                  >
+                    {isActive && wordWindow.length > 0 ? (
+                      <p className="leading-8">
+                        {words.map((word, wIdx) => {
+                          const isCurrent = wIdx === currentWordIndex;
+                          const isPast = wIdx < currentWordIndex;
+                          return (
+                            <React.Fragment key={wIdx}>
+                              <span
+                                className={`
+                                  transition-all duration-75 rounded px-0.5
+                                  ${isCurrent
+                                    ? "bg-primary/20 text-primary font-semibold"
+                                    : isPast
+                                    ? "text-muted-foreground"
+                                    : "text-foreground"
+                                  }
+                                `}
+                              >
+                                {word}
+                              </span>{" "}
+                            </React.Fragment>
+                          );
+                        })}
+                      </p>
+                    ) : (
+                      <p className={isActive ? "text-foreground" : "text-foreground/90"}>
+                        {para}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-400 gap-2">
+          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground gap-3">
             <AlertCircle className="h-8 w-8" />
-            <p>No document loaded</p>
+            <p className="text-sm">No document content loaded.</p>
           </div>
         )}
       </main>
 
-      {/* Speechify-style TTS overlay */}
+      {/* TTS overlay */}
       <TTSOverlay
         isPlaying={isPlaying}
         currentParagraphIndex={currentParagraphIndex}

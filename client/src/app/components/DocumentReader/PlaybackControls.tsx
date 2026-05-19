@@ -1,5 +1,3 @@
-// components/PlaybackControls.tsx
-
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, RotateCcw } from "lucide-react";
@@ -16,20 +14,21 @@ const PlaybackControls: React.FC<PlaybackControlsProps> = ({
   onStop,
 }) => {
   return (
-    <div className="flex justify-center gap-4">
+    <div className="flex justify-center gap-3">
       <Button
         onClick={isPlaying ? onStop : onPlay}
-        className="flex items-center gap-2"
+        className="flex items-center gap-2 bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700"
       >
-        {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-        {isPlaying ? "Stop" : "Play"}
+        {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+        {isPlaying ? "Pause" : "Play"}
       </Button>
       <Button
+        variant="outline"
         onClick={onStop}
         disabled={!isPlaying}
         className="flex items-center gap-2"
       >
-        <RotateCcw size={16} />
+        <RotateCcw className="h-4 w-4" />
         Reset
       </Button>
     </div>
