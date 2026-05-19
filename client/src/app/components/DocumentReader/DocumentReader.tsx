@@ -19,8 +19,8 @@ const PDFViewer = dynamic(() => import("./PDFViewer"), {
   ),
 });
 
-// Height of the fixed TTS overlay — keep in sync with TTSOverlay
-const OVERLAY_HEIGHT = 160;
+// Space reserved at the bottom for the floating TTS card (card height + bottom margin)
+const OVERLAY_HEIGHT = 180;
 // Height of the sticky header
 const HEADER_HEIGHT = 56; // h-14
 
