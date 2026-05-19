@@ -1,5 +1,6 @@
 import Header from "./Header";
 import HeroSection from "./HeroSection";
+import HowItWorksSection from "./HowItWorksSection";
 import FeaturesSection from "./FeaturesSection";
 import TestimonialsSection from "./TestimonialsSection";
 import PricingSection from "./PricingSection";
@@ -13,6 +14,7 @@ export default function Home() {
       <main>
         <HeroSection />
         <FeaturesSection />
+        <HowItWorksSection />
         <TestimonialsSection />
         <PricingSection />
         <FinalCTA />

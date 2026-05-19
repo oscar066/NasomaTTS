@@ -1,6 +1,6 @@
 // Hero Section Component
 import { Button } from "@/components/ui/button";
-import { Play, BookOpen, Headphones, Globe } from "lucide-react";
+import { Play, BookOpen, Pause, SkipBack, SkipForward } from "lucide-react";
 import Link from "next/link";
 
 export default function HeroSection() {
@@ -19,8 +19,8 @@ export default function HeroSection() {
               Your content, your voice
             </div>
 
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text">
-              <span className="text-transparent">Turn Reading Into</span>
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
+              <span className="text-foreground">Turn Reading Into</span>
               <br />
               <span className="bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
                 Listening Freedom
@@ -28,10 +28,9 @@ export default function HeroSection() {
             </h1>
 
             <p className="text-lg mb-8 text-muted-foreground leading-relaxed">
-              Nasoma transforms any text into natural, engaging audio that fits
-              your life. Listen to articles, books, and documents in lifelike
-              voices while you commute, exercise, or relax — saving time and
-              reducing eye strain.
+              Nasoma transforms any PDF or document into natural, engaging audio
+              that fits your life. Listen while you commute, exercise, or relax
+              — saving time and reducing eye strain.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -43,27 +42,32 @@ export default function HeroSection() {
                   <BookOpen className="mr-2 h-5 w-5" /> Start Reading Free
                 </Button>
               </Link>
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full sm:w-auto border-primary/20 hover:border-primary/50 shadow-sm"
-              >
-                <Play className="mr-2 h-4 w-4 text-primary" /> Hear Examples
-              </Button>
+              <Link href="/auth/login" passHref>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full sm:w-auto border-primary/20 hover:border-primary/50 shadow-sm"
+                >
+                  <Play className="mr-2 h-4 w-4 text-primary" /> Sign In
+                </Button>
+              </Link>
             </div>
 
-            <div className="mt-8 flex items-center gap-2 text-sm text-muted-foreground">
-              <div className="flex -space-x-1">
-                {[1, 2, 3, 4].map((i) => (
+            <div className="mt-8 flex items-center gap-3 text-sm text-muted-foreground">
+              <div className="flex -space-x-2">
+                {["#6366f1", "#8b5cf6", "#0ea5e9", "#10b981"].map((color, i) => (
                   <div
                     key={i}
-                    className="w-6 h-6 rounded-full bg-gray-300 border-2 border-background"
-                  ></div>
+                    className="w-7 h-7 rounded-full border-2 border-background flex items-center justify-center text-white text-xs font-bold"
+                    style={{ backgroundColor: color }}
+                  >
+                    {["S", "M", "E", "D"][i]}
+                  </div>
                 ))}
               </div>
               <span>
                 Trusted by{" "}
-                <span className="font-medium text-foreground">12,000+</span>{" "}
+                <span className="font-semibold text-foreground">12,000+</span>{" "}
                 readers worldwide
               </span>
             </div>
@@ -71,70 +75,85 @@ export default function HeroSection() {
 
           <div className="md:w-1/2 flex justify-center">
             <div className="relative">
-              {/* Decorative elements */}
+              {/* Decorative glow */}
               <div className="absolute -z-10 -top-6 -left-6 w-64 h-64 bg-primary/5 rounded-full blur-xl"></div>
               <div className="absolute -z-10 -bottom-6 -right-6 w-64 h-64 bg-purple-500/5 rounded-full blur-xl"></div>
 
-              {/* Device mockup */}
-              <div className="bg-background border border-border rounded-2xl shadow-2xl p-4 w-full max-w-md">
-                <div className="flex justify-between items-center mb-4">
-                  <div className="flex items-center gap-2">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-5 w-5 text-primary"
-                    >
-                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                      <line x1="12" x2="12" y1="19" y2="22" />
-                    </svg>
-                    <span className="font-medium">Now Playing</span>
+              {/* Document reader mockup */}
+              <div className="bg-background border border-border rounded-2xl shadow-2xl overflow-hidden w-full max-w-md">
+                {/* Window chrome */}
+                <div className="bg-secondary/40 px-4 py-2.5 flex items-center gap-3 border-b border-border">
+                  <div className="flex gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-red-400/80"></div>
+                    <div className="w-3 h-3 rounded-full bg-yellow-400/80"></div>
+                    <div className="w-3 h-3 rounded-full bg-green-400/80"></div>
                   </div>
-                  <div className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-full">
-                    02:14 / 15:30
-                  </div>
+                  <span className="text-xs text-muted-foreground flex-1 text-center truncate pr-8">
+                    The Great Office Chair Heist.pdf
+                  </span>
                 </div>
 
-                <div className="bg-secondary/30 rounded-lg p-4 mb-4">
-                  <h3 className="font-medium mb-2">
-                    Why Deep Work Matters in a Distracted World
-                  </h3>
-                  <p className="text-sm text-muted-foreground line-clamp-3">
-                    In today's constantly connected environment, the ability to
-                    focus deeply on cognitively demanding tasks becomes
-                    increasingly valuable...
+                {/* Document content */}
+                <div className="p-5 space-y-3 max-h-48 overflow-hidden">
+                  <h4 className="font-bold text-sm">The Great Office Chair Heist</h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    It all started with an innocent desire for comfort. Ethan, a
+                    junior developer at TechNova Inc.,{" "}
+                    <span className="bg-primary/20 text-foreground rounded px-0.5">
+                      had been suffering in silence—or rather, suffering in
+                      squeaky discomfort.
+                    </span>{" "}
+                    His office chair was a relic from a bygone era, a testament
+                    to the company&apos;s frugality.
+                  </p>
+                  <p className="text-xs text-muted-foreground leading-relaxed opacity-60">
+                    Meanwhile, across the room, the company&apos;s senior developer,
+                    Greg, sat like a king on a plush, ergonomic throne. It had
+                    lumbar support, adjustable arms, and most importantly: wheels
+                    that actually worked...
                   </p>
                 </div>
 
-                <div className="flex justify-between items-center">
-                  <div className="flex gap-3">
-                    <button className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition-colors">
-                      <Play className="h-4 w-4" />
-                    </button>
-                    <button className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors">
-                      <Headphones className="h-4 w-4" />
-                    </button>
+                {/* TTS overlay / playback bar */}
+                <div className="border-t border-border bg-secondary/20 px-4 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-[10px] font-medium">
+                        Karen · EN-AU
+                      </span>
+                    </div>
+                    <span className="text-xs font-mono text-primary">1:24 / 8:30</span>
                   </div>
 
-                  <div className="flex gap-1 items-center text-xs font-medium">
-                    <Globe className="h-3 w-3 text-primary" />
-                    <span>EN-AU</span>
-                    <span className="text-muted-foreground mx-1">|</span>
-                    <span>Karen</span>
+                  {/* Progress bar */}
+                  <div className="h-1.5 bg-secondary rounded-full mb-3 cursor-pointer">
+                    <div className="h-1.5 bg-gradient-to-r from-primary to-purple-500 rounded-full w-[17%]"></div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors">
+                        <SkipBack className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                      <button className="w-9 h-9 rounded-full bg-primary flex items-center justify-center hover:bg-primary/90 transition-colors shadow-md shadow-primary/20">
+                        <Pause className="h-4 w-4 text-white" />
+                      </button>
+                      <button className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors">
+                        <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    </div>
+                    <span className="text-xs bg-secondary text-foreground px-2 py-0.5 rounded-full font-medium">
+                      1.2×
+                    </span>
                   </div>
                 </div>
               </div>
 
               {/* Feature badges */}
-              <div className="absolute -top-3 -right-3 bg-green-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">
-                NEW: 40+ Voices
+              <div className="absolute -top-3 -right-3 bg-green-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-md">
+                40+ Voices
               </div>
-              <div className="absolute -bottom-3 -left-3 bg-primary text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">
+              <div className="absolute -bottom-3 -left-3 bg-primary text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-md">
                 100+ Languages
               </div>
             </div>
