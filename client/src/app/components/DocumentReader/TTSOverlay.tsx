@@ -6,9 +6,9 @@ import {
   Pause,
   SkipBack,
   SkipForward,
+  Mic,
   ChevronUp,
   ChevronDown,
-  Mic,
 } from "lucide-react";
 import type { Voice } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -59,44 +59,46 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
 }) => {
   const [expanded, setExpanded] = useState(true);
 
+  const speedIdx  = SPEEDS.indexOf(speed);
+  const canSlower = speedIdx > 0;
+  const canFaster = speedIdx < SPEEDS.length - 1;
+
   const progress =
     totalParagraphs > 0
-      ? Math.round((currentParagraphIndex / totalParagraphs) * 100)
+      ? ((currentParagraphIndex + 1) / totalParagraphs) * 100
       : 0;
 
-  const speedIdx = SPEEDS.indexOf(speed);
-  const canSlowDown = speedIdx > 0;
-  const canSpeedUp = speedIdx < SPEEDS.length - 1;
-
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50">
-      {/* Reading progress bar */}
-      <div className="h-0.5 bg-white/10">
+    <div className="fixed bottom-0 left-0 right-0 z-50 shadow-2xl">
+      {/* ── Progress bar ──────────────────────────────────────── */}
+      <div className="h-1 bg-white/10">
         <div
-          className="h-full bg-gradient-to-r from-primary to-purple-500 transition-all duration-500"
+          className="h-full bg-gradient-to-r from-primary to-purple-600 transition-all duration-300"
           style={{ width: `${progress}%` }}
         />
       </div>
 
-      {/* Word focus strip */}
+      {/* ── Word focus strip (collapsible) ────────────────────── */}
       {expanded && (
-        <div className="bg-zinc-900 border-t border-white/5 px-6 py-3 flex items-center justify-center min-h-[68px]">
+        <div className="bg-zinc-900 min-h-[68px] flex items-center justify-center px-4 py-3 overflow-hidden">
           {wordWindow.length > 0 ? (
-            <div className="flex items-baseline gap-2 flex-wrap justify-center max-w-3xl">
+            <div className="flex items-center gap-2 flex-wrap justify-center max-w-3xl">
               {wordWindow.map((word, i) => {
-                const globalIdx = windowStart + i;
-                const isCurrent = globalIdx === currentWordIndex;
-                const isPast = globalIdx < currentWordIndex;
+                const absoluteIdx = windowStart + i;
+                const isCurrent = absoluteIdx === currentWordIndex;
+                const isPast    = absoluteIdx < currentWordIndex;
                 return (
                   <span
                     key={i}
-                    className={`transition-all duration-100 select-none ${
-                      isCurrent
+                    className={`
+                      transition-all duration-75 select-none
+                      ${isCurrent
                         ? "text-primary font-bold text-2xl scale-110 drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]"
                         : isPast
-                        ? "text-zinc-600 text-base"
+                        ? "text-zinc-600 text-lg"
                         : "text-zinc-300 text-lg"
-                    }`}
+                      }
+                    `}
                   >
                     {word}
                   </span>
@@ -104,67 +106,55 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
               })}
             </div>
           ) : (
-            <p className="text-zinc-500 text-sm select-none">
-              {isPlaying ? "Starting…" : "Press play to begin listening"}
+            <p className="text-zinc-600 text-sm italic">
+              {isPlaying ? "Synthesising…" : "Press play to start reading"}
             </p>
           )}
         </div>
       )}
 
-      {/* Controls bar */}
-      <div className="bg-zinc-950 border-t border-white/5 px-4 py-2.5">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
+      {/* ── Controls bar ──────────────────────────────────────── */}
+      <div className="bg-zinc-950 border-t border-white/5 h-16">
+        <div className="h-full max-w-4xl mx-auto px-4 flex items-center justify-between gap-3">
 
-          {/* Expand / collapse word strip */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-white/10 flex-shrink-0"
-            onClick={() => setExpanded((e) => !e)}
-            title={expanded ? "Hide word display" : "Show word display"}
-          >
-            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-          </Button>
-
-          {/* Playback controls */}
+          {/* Playback */}
           <div className="flex items-center gap-1.5">
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-zinc-300 hover:text-white hover:bg-white/10"
+              className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-white/10"
               onClick={onPrevParagraph}
               disabled={currentParagraphIndex <= 0}
-              title="Previous paragraph"
+              title="Previous paragraph (←)"
             >
               <SkipBack className="h-4 w-4" />
             </Button>
 
             <button
               onClick={isPlaying ? onStop : onPlay}
-              className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700 text-white flex items-center justify-center shadow-lg shadow-primary/30 transition-all hover:scale-105 active:scale-95 flex-shrink-0"
-              title={isPlaying ? "Pause" : "Play"}
+              className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-purple-600 hover:opacity-90 text-white flex items-center justify-center shadow-lg shadow-primary/30 transition-all hover:scale-105 active:scale-95"
+              title={isPlaying ? "Pause (Space)" : "Play (Space)"}
             >
-              {isPlaying ? (
-                <Pause className="h-4 w-4" />
-              ) : (
-                <Play className="h-4 w-4 ml-0.5" />
-              )}
+              {isPlaying
+                ? <Pause className="h-4 w-4" />
+                : <Play  className="h-4 w-4 ml-0.5" />
+              }
             </button>
 
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-zinc-300 hover:text-white hover:bg-white/10"
+              className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-white/10"
               onClick={onNextParagraph}
               disabled={currentParagraphIndex >= totalParagraphs - 1}
-              title="Next paragraph"
+              title="Next paragraph (→)"
             >
               <SkipForward className="h-4 w-4" />
             </Button>
           </div>
 
           {/* Voice selector */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2">
             <Mic className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" />
             <Select value={voice} onValueChange={onVoiceChange}>
               <SelectTrigger className="h-7 w-36 bg-white/5 border-white/10 text-zinc-200 text-xs hover:bg-white/10 focus:ring-0 focus:ring-offset-0">
@@ -184,14 +174,14 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
             </Select>
           </div>
 
-          {/* Speed control */}
-          <div className="flex items-center gap-0.5 flex-shrink-0">
+          {/* Speed */}
+          <div className="flex items-center gap-0.5">
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-zinc-400 hover:text-white hover:bg-white/10 text-sm font-bold"
-              onClick={() => canSlowDown && onSpeedChange(SPEEDS[speedIdx - 1])}
-              disabled={!canSlowDown}
+              className="h-7 w-7 text-zinc-400 hover:text-white hover:bg-white/10 font-bold text-base"
+              onClick={() => canSlower && onSpeedChange(SPEEDS[speedIdx - 1])}
+              disabled={!canSlower}
             >
               −
             </Button>
@@ -201,26 +191,36 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-zinc-400 hover:text-white hover:bg-white/10 text-sm font-bold"
-              onClick={() => canSpeedUp && onSpeedChange(SPEEDS[speedIdx + 1])}
-              disabled={!canSpeedUp}
+              className="h-7 w-7 text-zinc-400 hover:text-white hover:bg-white/10 font-bold text-base"
+              onClick={() => canFaster && onSpeedChange(SPEEDS[speedIdx + 1])}
+              disabled={!canFaster}
             >
               +
             </Button>
           </div>
 
-          {/* Progress counter */}
-          <span className="text-zinc-500 text-xs font-mono flex-shrink-0 tabular-nums hidden sm:block">
-            {totalParagraphs > 0
-              ? `${currentParagraphIndex + 1} / ${totalParagraphs}`
-              : "—"}
-          </span>
-        </div>
+          {/* Progress counter + expand toggle */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-zinc-500 text-xs font-mono tabular-nums hidden sm:block">
+              {totalParagraphs > 0
+                ? `${Math.max(1, currentParagraphIndex + 1)} / ${totalParagraphs}`
+                : "—"}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-zinc-500 hover:text-white hover:bg-white/10"
+              onClick={() => setExpanded((v) => !v)}
+              title={expanded ? "Collapse word strip" : "Expand word strip"}
+            >
+              {expanded
+                ? <ChevronDown className="h-3.5 w-3.5" />
+                : <ChevronUp   className="h-3.5 w-3.5" />
+              }
+            </Button>
+          </div>
 
-        {/* Keyboard hint */}
-        <p className="text-center text-zinc-700 text-[10px] mt-1.5 hidden sm:block select-none">
-          Space · play/pause &nbsp;·&nbsp; ← → · skip paragraph
-        </p>
+        </div>
       </div>
     </div>
   );

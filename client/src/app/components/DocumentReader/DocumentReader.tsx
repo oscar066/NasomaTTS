@@ -78,9 +78,7 @@ const DocumentReader: React.FC = () => {
         </Button>
 
         <div className="w-px h-5 bg-border flex-shrink-0" />
-
         <NasomaLogo size="sm" showPulse={isPlaying} />
-
         <div className="w-px h-5 bg-border flex-shrink-0" />
 
         <div className="flex items-center gap-2 min-w-0 flex-1">
