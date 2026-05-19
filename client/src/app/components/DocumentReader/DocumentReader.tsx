@@ -112,10 +112,10 @@ const DocumentReader: React.FC = () => {
         {text ? (
           <div
             ref={contentRef}
-            className="overflow-y-auto px-4 sm:px-8 py-6"
-            style={{ height: `calc(100vh - ${HEADER_HEIGHT}px - ${OVERLAY_HEIGHT}px)` }}
+            className="overflow-y-auto px-4 sm:px-8 pt-6"
+            style={{ height: `calc(100vh - ${HEADER_HEIGHT}px)` }}
           >
-            <div className="max-w-2xl mx-auto space-y-2">
+            <div className="max-w-2xl mx-auto space-y-2" style={{ paddingBottom: `${OVERLAY_HEIGHT}px` }}>
               {paragraphs.map((para, idx) => {
                 const isActive = idx === currentParagraphIndex;
                 const words = para.split(/\s+/).filter(Boolean);
