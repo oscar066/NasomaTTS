@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { documentsApi, voicesApi, speakUrl, Voice } from "@/lib/api";
+import { documentsApi, voicesApi, speakUrl, pdfProxyUrl, Voice } from "@/lib/api";
 import { useSession } from "next-auth/react";
+import type { PageData } from "@/app/components/DocumentReader/components/PDFViewer";
 
 export interface ReaderState {
   docName: string;
   text: string;
+  pdfUrl: string | null;
   paragraphs: string[];
   currentParagraphIndex: number;
   currentWordIndex: number;
@@ -18,6 +20,22 @@ export interface ReaderState {
   speed: number;
   loading: boolean;
   error: string;
+  // PDF-specific
+  pageData: PageData[];
+  currentTTSPage: number;
+}
+
+// Compute the absolute word index within a page from (paragraphIndex, wordIndex).
+// Used to look up the word's position in pageData[page].words.
+function computeHighlightWordIdx(state: ReaderState): number {
+  if (state.currentTTSPage < 0) return -1;
+  const page = state.pageData[state.currentTTSPage];
+  if (!page || state.currentParagraphIndex < 0 || state.currentWordIndex < 0) return -1;
+  let acc = 0;
+  for (let i = 0; i < state.currentParagraphIndex; i++) {
+    acc += page.paragraphWordCounts[i] ?? 0;
+  }
+  return acc + state.currentWordIndex;
 }
 
 export const useDocumentReader = () => {
@@ -29,6 +47,7 @@ export const useDocumentReader = () => {
   const [state, setState] = useState<ReaderState>({
     docName: "",
     text: "",
+    pdfUrl: null,
     paragraphs: [],
     currentParagraphIndex: -1,
     currentWordIndex: -1,
@@ -41,11 +60,18 @@ export const useDocumentReader = () => {
     speed: 1,
     loading: true,
     error: "",
+    pageData: [],
+    currentTTSPage: -1,
   });
 
-  const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
+  // Always-fresh ref so SSE closures never read stale state.
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
+  const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  // Ref to the playPage function so the SSE "done" handler can call the next page.
+  const playPageRef = useRef<((idx: number) => void) | null>(null);
 
   const update = (patch: Partial<ReaderState>) =>
     setState((prev) => ({ ...prev, ...patch }));
@@ -66,22 +92,15 @@ export const useDocumentReader = () => {
         return;
       }
     } catch {
-      // fall through to browser fallback
+      // fall through to browser TTS
     }
 
-    // NeuTTS unavailable — use browser speechSynthesis
     const loadBrowser = () => {
       const bv = getBrowserVoices();
-      update({
-        voices: bv,
-        voice: bv[0]?.id ?? "",
-        ttsAvailable: false,
-        error: "",
-      });
+      update({ voices: bv, voice: bv[0]?.id ?? "", ttsAvailable: false, error: "" });
     };
 
     if (typeof window !== "undefined" && window.speechSynthesis) {
-      // getVoices() may be empty until the voiceschanged event fires
       if (window.speechSynthesis.getVoices().length > 0) {
         loadBrowser();
       } else {
@@ -89,7 +108,6 @@ export const useDocumentReader = () => {
           loadBrowser();
           window.speechSynthesis.onvoiceschanged = null;
         };
-        // Fallback if event never fires
         setTimeout(loadBrowser, 1000);
       }
     } else {
@@ -105,9 +123,7 @@ export const useDocumentReader = () => {
 
     const init = async () => {
       update({ loading: true, error: "" });
-
       try {
-        // Check localStorage cache first
         const cached = localStorage.getItem("currentDocument");
         if (cached) {
           const parsed = JSON.parse(cached);
@@ -115,6 +131,7 @@ export const useDocumentReader = () => {
             update({
               docName: parsed.title,
               text: parsed.content,
+              pdfUrl: parsed.pdf_url ? pdfProxyUrl(documentId) : null,
               paragraphs: parsed.content.split(/\n\s*\n/).filter(Boolean),
             });
             await fetchVoices();
@@ -126,11 +143,12 @@ export const useDocumentReader = () => {
         const doc = await documentsApi.get(documentId, session?.accessToken);
         localStorage.setItem(
           "currentDocument",
-          JSON.stringify({ id: doc.id, title: doc.title, content: doc.content })
+          JSON.stringify({ id: doc.id, title: doc.title, content: doc.content, pdf_url: doc.pdf_url })
         );
         update({
           docName: doc.title,
           text: doc.content,
+          pdfUrl: doc.pdf_url ? pdfProxyUrl(documentId) : null,
           paragraphs: doc.content.split(/\n\s*\n/).filter(Boolean),
         });
         await fetchVoices();
@@ -142,11 +160,9 @@ export const useDocumentReader = () => {
     };
 
     init();
-
     return () => eventSourceRef.current?.close();
   }, [documentId]);
 
-  // Auto-play when voices are ready and the URL says so
   useEffect(() => {
     if (
       searchParams.get("autoplay") === "true" &&
@@ -158,6 +174,8 @@ export const useDocumentReader = () => {
       return () => clearTimeout(t);
     }
   }, [state.voices, state.text]);
+
+  // ── Text-mode SSE stream ─────────────────────────────────────────────────
 
   const startSseStream = (text: string, voice: string, speed: number, paragraphOffset = 0) => {
     eventSourceRef.current?.close();
@@ -211,19 +229,93 @@ export const useDocumentReader = () => {
     window.speechSynthesis.speak(utterance);
   };
 
+  // ── PDF page-by-page TTS ─────────────────────────────────────────────────
+
+  const playPage = (idx: number) => {
+    const { pageData, voice, speed, ttsAvailable } = stateRef.current;
+
+    if (idx >= pageData.length) {
+      handleStop();
+      return;
+    }
+
+    const pageText = pageData[idx].paragraphs.join("\n\n");
+    update({
+      currentTTSPage: idx,
+      currentParagraphIndex: -1,
+      currentWordIndex: -1,
+      wordWindow: [],
+      windowStart: 0,
+      isPlaying: true,
+      error: "",
+    });
+
+    eventSourceRef.current?.close();
+    const wpm = Math.round(150 * speed);
+    const sseUrl = speakUrl(pageText, voice, wpm);
+    const es = new EventSource(sseUrl);
+    eventSourceRef.current = es;
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.done) {
+          // Advance to next page
+          playPageRef.current?.(idx + 1);
+          return;
+        }
+        if (data.newParagraph) {
+          update({
+            currentParagraphIndex: data.paragraphIndex,
+            currentWordIndex: -1,
+            wordWindow: [],
+            windowStart: 0,
+          });
+        }
+        if (data.wordWindow) {
+          update({
+            wordWindow: data.wordWindow,
+            windowStart: data.windowStart,
+            currentWordIndex: data.currentWordIndex,
+          });
+        }
+      } catch {
+        update({ error: "Error processing TTS data." });
+        handleStop();
+      }
+    };
+
+    es.onerror = () => {
+      update({ error: "Connection to TTS service failed." });
+      handleStop();
+    };
+
+    if (!ttsAvailable) {
+      startBrowserAudio(pageText, voice, speed);
+    }
+  };
+
+  // Keep the ref current on every render.
+  playPageRef.current = playPage;
+
+  // ── Controls ─────────────────────────────────────────────────────────────
+
   const handlePlay = () => {
-    if (!state.text.trim()) { update({ error: "No text to read." }); return; }
     if (!state.voice) { update({ error: "Please select a voice before playing." }); return; }
 
-    update({ error: "", isPlaying: true });
-
-    if (state.ttsAvailable) {
-      startSseStream(state.text, state.voice, state.speed);
-    } else {
-      // Browser TTS: SSE for word highlighting + Web Speech API for audio
-      startSseStream(state.text, state.voice, state.speed);
-      startBrowserAudio(state.text, state.voice, state.speed);
+    if (state.pdfUrl) {
+      if (state.pageData.length === 0) {
+        update({ error: "PDF is still indexing — please wait a moment." });
+        return;
+      }
+      playPage(0);
+      return;
     }
+
+    if (!state.text.trim()) { update({ error: "No text to read." }); return; }
+    update({ error: "", isPlaying: true });
+    startSseStream(state.text, state.voice, state.speed);
+    if (!state.ttsAvailable) startBrowserAudio(state.text, state.voice, state.speed);
   };
 
   const handleStop = () => {
@@ -239,10 +331,24 @@ export const useDocumentReader = () => {
       currentWordIndex: -1,
       wordWindow: [],
       windowStart: 0,
+      currentTTSPage: -1,
     });
   };
 
+  // In text mode: skip to a paragraph. In PDF mode: skip to a page.
   const skipToParagraph = (index: number) => {
+    const { pdfUrl, pageData, isPlaying, voice, ttsAvailable, speed } = stateRef.current;
+
+    if (pdfUrl && pageData.length > 0) {
+      const clamped = Math.max(0, Math.min(pageData.length - 1, index));
+      if (isPlaying) {
+        playPageRef.current?.(clamped);
+      } else {
+        update({ currentTTSPage: clamped });
+      }
+      return;
+    }
+
     setState((prev) => {
       if (index < 0 || index >= prev.paragraphs.length) return prev;
 
@@ -267,8 +373,10 @@ export const useDocumentReader = () => {
 
   return {
     state,
+    highlightWordIdx: computeHighlightWordIdx(state),
     setVoice: (voice: string) => update({ voice }),
     setSpeed: (speed: number) => update({ speed }),
+    setPageData: (pages: PageData[]) => update({ pageData: pages }),
     handlePlay,
     handleStop,
     skipToParagraph,

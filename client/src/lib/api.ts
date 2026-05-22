@@ -53,6 +53,7 @@ export interface Document {
   id: string;
   title: string;
   content: string;
+  pdf_url?: string | null;
   author: { id: string; username: string; email: string };
   createdAt: string;
   updatedAt: string;
@@ -71,7 +72,7 @@ export const documentsApi = {
   get: (id: string, token?: string) =>
     request<Document>(`/documents/${id}`, {}, token),
 
-  create: (body: { title: string; content: string }, token: string) =>
+  create: (body: { title: string; content: string; pdf_url?: string | null }, token: string) =>
     request<Document>("/documents/", {
       method: "POST",
       body: JSON.stringify(body),
@@ -87,7 +88,7 @@ export const pdfApi = {
   upload: (file: File, token: string) => {
     const form = new FormData();
     form.append("pdf", file);
-    return request<{ title: string; content: string; message: string }>(
+    return request<{ title: string; content: string; pdf_url: string | null; message: string }>(
       "/pdf/upload",
       { method: "POST", body: form },
       token
@@ -108,6 +109,10 @@ export const voicesApi = {
 };
 
 // ── Speak (SSE URL helper) ───────────────────────────────────────────────────
+
+export function pdfProxyUrl(docId: string): string {
+  return `${BASE}/pdf/${docId}`;
+}
 
 export function speakUrl(text: string, voice: string, wpm: number): string {
   const params = new URLSearchParams({

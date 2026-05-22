@@ -21,6 +21,7 @@ def _fmt_doc(doc: dict, author: dict) -> dict:
         "id": str(doc["_id"]),
         "title": doc["title"],
         "content": doc["content"],
+        "pdf_url": doc.get("pdf_url"),
         "author": author,
         "createdAt": doc["createdAt"],
         "updatedAt": doc["updatedAt"],
@@ -86,6 +87,7 @@ async def create_document(
         {
             "title": data.title,
             "content": data.content,
+            "pdf_url": data.pdf_url,
             "author": current_user["_id"],
             "createdAt": now,
             "updatedAt": now,

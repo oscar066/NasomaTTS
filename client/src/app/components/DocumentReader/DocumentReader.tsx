@@ -7,10 +7,10 @@ import { ChevronLeft, AlertCircle, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import NasomaLogo from "../Logo/nasoma-logo";
-import TTSOverlay from "./TTSOverlay";
+import TTSOverlay from "./components/TTSOverlay";
 import { useDocumentReader } from "@/hooks/useDocumentReader";
 
-const PDFViewer = dynamic(() => import("./PDFViewer"), {
+const PDFViewer = dynamic(() => import("./components/PDFViewer"), {
   ssr: false,
   loading: () => (
     <div className="flex flex-col items-center justify-center h-64 text-muted-foreground bg-secondary/30 animate-pulse">
@@ -19,10 +19,8 @@ const PDFViewer = dynamic(() => import("./PDFViewer"), {
   ),
 });
 
-// Space reserved at the bottom for the floating TTS card (card height + bottom margin)
 const OVERLAY_HEIGHT = 180;
-// Height of the sticky header
-const HEADER_HEIGHT = 56; // h-14
+const HEADER_HEIGHT = 56;
 
 const DocumentReader: React.FC = () => {
   const router = useRouter();
@@ -32,6 +30,7 @@ const DocumentReader: React.FC = () => {
     state: {
       docName,
       text,
+      pdfUrl,
       paragraphs,
       currentParagraphIndex,
       currentWordIndex,
@@ -43,9 +42,13 @@ const DocumentReader: React.FC = () => {
       speed,
       loading,
       error,
+      pageData,
+      currentTTSPage,
     },
+    highlightWordIdx,
     setVoice,
     setSpeed,
+    setPageData,
     handlePlay,
     handleStop,
     skipToParagraph,
@@ -63,9 +66,14 @@ const DocumentReader: React.FC = () => {
     );
   }
 
+  // In PDF mode the skip buttons navigate pages; in text mode they navigate paragraphs.
+  const isPdfMode = !!pdfUrl;
+  const overlayParagraphIndex = isPdfMode ? currentTTSPage : currentParagraphIndex;
+  const overlayTotalParagraphs = isPdfMode ? pageData.length : paragraphs.length;
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* Sticky header — h-14 to match dashboard */}
+      {/* Sticky header */}
       <header className="sticky top-0 z-20 h-14 flex items-center bg-background border-b border-border px-4 gap-3">
         <Button
           variant="ghost"
@@ -109,13 +117,36 @@ const DocumentReader: React.FC = () => {
 
       {/* Main content */}
       <main className="flex-1">
-        {text ? (
+        {pdfUrl ? (
+          /* ── PDF view: pages rendered with word-level highlight overlay ── */
+          <div
+            ref={contentRef}
+            className="overflow-y-auto bg-muted/20"
+            style={{ height: `calc(100vh - ${HEADER_HEIGHT}px)` }}
+          >
+            <div
+              className="max-w-4xl mx-auto px-6 py-6"
+              style={{ paddingBottom: `${OVERLAY_HEIGHT}px` }}
+            >
+              <PDFViewer
+                url={pdfUrl}
+                onPagesReady={setPageData}
+                highlightPage={currentTTSPage}
+                highlightWordIdx={highlightWordIdx}
+              />
+            </div>
+          </div>
+        ) : text ? (
+          /* ── Text view: plain-text documents with paragraph/word highlighting ── */
           <div
             ref={contentRef}
             className="overflow-y-auto px-4 sm:px-8 pt-6"
             style={{ height: `calc(100vh - ${HEADER_HEIGHT}px)` }}
           >
-            <div className="max-w-2xl mx-auto space-y-2" style={{ paddingBottom: `${OVERLAY_HEIGHT}px` }}>
+            <div
+              className="max-w-2xl mx-auto space-y-2"
+              style={{ paddingBottom: `${OVERLAY_HEIGHT}px` }}
+            >
               {paragraphs.map((para, idx) => {
                 const isActive = idx === currentParagraphIndex;
                 const words = para.split(/\s+/).filter(Boolean);
@@ -175,11 +206,11 @@ const DocumentReader: React.FC = () => {
         )}
       </main>
 
-      {/* TTS overlay */}
+      {/* Floating TTS card */}
       <TTSOverlay
         isPlaying={isPlaying}
-        currentParagraphIndex={currentParagraphIndex}
-        totalParagraphs={paragraphs.length}
+        currentParagraphIndex={overlayParagraphIndex}
+        totalParagraphs={overlayTotalParagraphs}
         currentWordIndex={currentWordIndex}
         wordWindow={wordWindow}
         windowStart={windowStart}
@@ -188,8 +219,8 @@ const DocumentReader: React.FC = () => {
         speed={speed}
         onPlay={handlePlay}
         onStop={handleStop}
-        onPrevParagraph={() => skipToParagraph(currentParagraphIndex - 1)}
-        onNextParagraph={() => skipToParagraph(currentParagraphIndex + 1)}
+        onPrevParagraph={() => skipToParagraph(overlayParagraphIndex - 1)}
+        onNextParagraph={() => skipToParagraph(overlayParagraphIndex + 1)}
         onVoiceChange={setVoice}
         onSpeedChange={setSpeed}
       />

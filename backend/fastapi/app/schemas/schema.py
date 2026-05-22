@@ -13,3 +13,4 @@ class UserSignIn(BaseModel):
 class DocumentCreate(BaseModel):
     title: str
     content: str
+    pdf_url: str | None = None
