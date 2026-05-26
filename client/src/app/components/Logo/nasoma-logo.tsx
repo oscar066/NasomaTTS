@@ -3,48 +3,65 @@ import React from "react";
 interface NasomaLogoProps {
   size?: "sm" | "md" | "lg";
   showPulse?: boolean;
+  showText?: boolean;
+  /**
+   * "default" — light backgrounds (mix-blend-mode: multiply removes white bg)
+   * "onDark"  — dark/gradient backgrounds (logo wrapped in a glass pill)
+   */
+  variant?: "default" | "onDark";
 }
 
-const NasomaLogo: React.FC<NasomaLogoProps> = ({ 
+const NasomaLogo: React.FC<NasomaLogoProps> = ({
   size = "md",
-  showPulse = true 
+  showPulse = false,
+  showText = false,
+  variant = "default",
 }) => {
-  const sizes = {
-    sm: "h-7 w-7",
-    md: "h-10 w-10",
-    lg: "h-12 w-12"
-  };
+  const heights     = { sm: 40, md: 52, lg: 68 };
+  const textSizes   = { sm: "text-lg", md: "text-xl", lg: "text-2xl" };
+  const h           = heights[size];
 
-  const textSizes = {
-    sm: "text-xl",
-    md: "text-2xl",
-    lg: "text-3xl"
-  };
+  const logoImg = (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/Me-nasoma-tts.png"
+      alt="Me-Nasoma"
+      style={{
+        height: h,
+        width: "auto",
+        // On light backgrounds the white bg blends away; colours stay vivid.
+        mixBlendMode: variant === "default" ? "multiply" : undefined,
+      }}
+    />
+  );
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="relative">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={`${sizes[size]} text-primary group-hover:scale-110 transition-transform duration-300`}
+    <div className="relative inline-flex items-center gap-2">
+      {variant === "onDark" ? (
+        /* Glass pill so the logo's white background doesn't clash with the
+           dark gradient — the logo colours are preserved inside. */
+        <div className="bg-white/20 backdrop-blur-sm rounded-xl px-2 py-1 border border-white/25">
+          {logoImg}
+        </div>
+      ) : (
+        logoImg
+      )}
+
+      {showText && (
+        <span
+          className={`font-bold ${textSizes[size]} ${
+            variant === "onDark"
+              ? "text-white"
+              : "bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent"
+          }`}
         >
-          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-          <line x1="12" x2="12" y1="19" y2="22" />
-        </svg>
-        {showPulse && (
-          <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse" />
-        )}
-      </div>
-      <span className={`${textSizes[size]} font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent`}>
-        Nasoma
-      </span>
+          Nasoma
+        </span>
+      )}
+
+      {showPulse && (
+        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-400 rounded-full animate-pulse" />
+      )}
     </div>
   );
 };

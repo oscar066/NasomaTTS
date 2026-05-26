@@ -10,6 +10,7 @@ import { LogIn, Loader2, AlertCircle, Headphones, FileText, Globe } from "lucide
 import Link from "next/link";
 import { FaGoogle } from "react-icons/fa";
 import { BsEyeFill, BsEyeSlashFill } from "react-icons/bs";
+import NasomaLogo from "@/app/components/Logo/nasoma-logo";
 
 const features = [
   { icon: FileText, text: "Upload any PDF or document" },
@@ -64,18 +65,8 @@ export default function LoginPage() {
         <div className="absolute -bottom-24 -right-24 w-72 h-72 bg-purple-300/10 rounded-full blur-3xl" />
 
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 relative z-10">
-          <div className="relative">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              className="h-8 w-8 text-white">
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" x2="12" y1="19" y2="22" />
-            </svg>
-            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-400 rounded-full animate-pulse" />
-          </div>
-          <span className="text-2xl font-bold text-white">Nasoma</span>
+        <Link href="/" className="relative z-10">
+          <NasomaLogo size="md" variant="onDark" showText />
         </Link>
 
         {/* Center content */}
@@ -113,17 +104,8 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="flex lg:hidden justify-center mb-8">
-            <Link href="/" className="flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                className="h-7 w-7 text-primary">
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" x2="12" y1="19" y2="22" />
-              </svg>
-              <span className="text-xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-                Nasoma
-              </span>
+            <Link href="/">
+              <NasomaLogo size="sm" showText />
             </Link>
           </div>
 
