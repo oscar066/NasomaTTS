@@ -14,3 +14,4 @@ class DocumentCreate(BaseModel):
     title: str
     content: str
     pdf_url: str | None = None
+    pages: list | None = None   # [{"page_number": int, "text": str}]

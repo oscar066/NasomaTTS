@@ -63,7 +63,7 @@ export function FileCard({ file, onDelete }: FileCardProps) {
     e.stopPropagation();
     localStorage.setItem(
       "currentDocument",
-      JSON.stringify({ id: file.id, content: file.content, title: file.title })
+      JSON.stringify({ id: file.id, content: file.content, title: file.title, pdf_url: file.pdf_url ?? null, pages: file.pages ?? null })
     );
     router.push(`/documents/${file.id}?autoplay=true`);
   };

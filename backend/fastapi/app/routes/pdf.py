@@ -32,9 +32,13 @@ async def upload_pdf_route(
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
 
     try:
-        doc = fitz.open(stream=content, filetype="pdf")
-        text = "".join(page.get_text() for page in doc)
-        doc.close()
+        fitz_doc = fitz.open(stream=content, filetype="pdf")
+        pages = [
+            {"page_number": i + 1, "text": page.get_text()}
+            for i, page in enumerate(fitz_doc)
+        ]
+        text = "".join(p["text"] for p in pages)
+        fitz_doc.close()
     except Exception as e:
         logger.error("PDF extraction failed for %s: %s", pdf.filename, e)
         raise HTTPException(status_code=500, detail="Error extracting text from PDF")
@@ -47,12 +51,16 @@ async def upload_pdf_route(
     except Exception as e:
         logger.warning("MinIO upload failed, continuing without PDF: %s", e)
 
-    logger.info("PDF uploaded: filename=%s chars=%d has_key=%s", pdf.filename, len(text), bool(pdf_key))
+    logger.info(
+        "PDF uploaded: filename=%s pages=%d chars=%d has_key=%s",
+        pdf.filename, len(pages), len(text), bool(pdf_key),
+    )
     return {
         "message": "PDF parsed successfully",
         "title": pdf.filename,
         "content": text,
-        "pdf_url": pdf_key,   # stored as the MinIO object key
+        "pdf_url": pdf_key,
+        "pages": pages,       # per-page text for uniform TTS
     }
 
 

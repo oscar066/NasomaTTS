@@ -3,6 +3,7 @@ import json
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
+from pydantic import BaseModel
 
 from ..services.tts import tts_service
 from ..utils.logger import setup_logger
@@ -10,9 +11,15 @@ from ..utils.logger import setup_logger
 logger = setup_logger(__name__)
 router = APIRouter(tags=["speak"])
 
+class SpeakRequest(BaseModel):
+    text: str
+    voice: str = "dave"
+    wpm: int = 150
 
-@router.get("/speak")
-async def speak(request: Request, text: str, voice: str = "dave", wpm: int = 150):
+
+@router.post("/speak")
+async def speak(request: Request, payload: SpeakRequest):
+    text, voice, wpm = payload.text, payload.voice, payload.wpm
     if not text:
         raise HTTPException(status_code=400, detail="text is required")
 
@@ -26,6 +33,8 @@ async def speak(request: Request, text: str, voice: str = "dave", wpm: int = 150
     window_size = 5
 
     async def event_stream():
+        abs_word_idx = 0   # absolute word position across all paragraphs
+
         for p_idx, paragraph in enumerate(paragraphs):
             if await request.is_disconnected():
                 break
@@ -36,7 +45,7 @@ async def speak(request: Request, text: str, voice: str = "dave", wpm: int = 150
 
             # Signal start of new paragraph
             yield (
-                f"data: {json.dumps({'paragraphIndex': p_idx, 'currentWordIndex': -1, 'wordWindow': [], 'windowStart': 0, 'fullParagraph': ' '.join(words), 'newParagraph': True})}\n\n"
+                f"data: {json.dumps({'paragraphIndex': p_idx, 'currentWordIndex': -1, 'absoluteWordIndex': abs_word_idx, 'wordWindow': [], 'windowStart': 0, 'fullParagraph': ' '.join(words), 'newParagraph': True})}\n\n"
             )
 
             for word_idx in range(len(words)):
@@ -48,9 +57,10 @@ async def speak(request: Request, text: str, voice: str = "dave", wpm: int = 150
                 end = min(len(words) - 1, word_idx + half)
 
                 yield (
-                    f"data: {json.dumps({'paragraphIndex': p_idx, 'currentWordIndex': word_idx, 'wordWindow': words[start:end + 1], 'windowStart': start, 'fullParagraph': ' '.join(words), 'newParagraph': False})}\n\n"
+                    f"data: {json.dumps({'paragraphIndex': p_idx, 'currentWordIndex': word_idx, 'absoluteWordIndex': abs_word_idx, 'wordWindow': words[start:end + 1], 'windowStart': start, 'fullParagraph': ' '.join(words), 'newParagraph': False})}\n\n"
                 )
 
+                abs_word_idx += 1
                 await asyncio.sleep(ms_per_word / 1000)
 
         yield f"data: {json.dumps({'done': True})}\n\n"

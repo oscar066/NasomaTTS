@@ -79,7 +79,7 @@ const DocumentReader: React.FC = () => {
           variant="ghost"
           size="sm"
           className="text-muted-foreground hover:text-foreground -ml-1 flex-shrink-0"
-          onClick={() => router.push("/dashboard")}
+          onClick={() => { handleStop(); router.push("/dashboard"); }}
         >
           <ChevronLeft className="h-4 w-4 mr-1" />
           Back

@@ -22,6 +22,7 @@ def _fmt_doc(doc: dict, author: dict) -> dict:
         "title": doc["title"],
         "content": doc["content"],
         "pdf_url": doc.get("pdf_url"),
+        "pages": doc.get("pages"),   # per-page text; None for legacy/text-only docs
         "author": author,
         "createdAt": doc["createdAt"],
         "updatedAt": doc["updatedAt"],
@@ -88,6 +89,7 @@ async def create_document(
             "title": data.title,
             "content": data.content,
             "pdf_url": data.pdf_url,
+            "pages": data.pages,
             "author": current_user["_id"],
             "createdAt": now,
             "updatedAt": now,
