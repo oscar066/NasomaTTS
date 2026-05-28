@@ -3,7 +3,7 @@
 import React, { useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, AlertCircle, FileText } from "lucide-react";
+import { ChevronLeft, AlertCircle, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import NasomaLogo from "../Logo/nasoma-logo";
@@ -13,7 +13,8 @@ import { useDocumentReader } from "@/hooks/useDocumentReader";
 const PDFViewer = dynamic(() => import("./components/PDFViewer"), {
   ssr: false,
   loading: () => (
-    <div className="flex flex-col items-center justify-center h-64 text-muted-foreground bg-secondary/30 animate-pulse">
+    <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
+      <Loader2 className="h-6 w-6 animate-spin text-primary" />
       <span className="text-sm">Loading PDF viewer…</span>
     </div>
   ),
@@ -31,6 +32,7 @@ const DocumentReader: React.FC = () => {
       docName,
       text,
       pdfUrl,
+      storedPages,
       paragraphs,
       currentParagraphIndex,
       currentWordIndex,
@@ -56,12 +58,10 @@ const DocumentReader: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-3">
         <NasomaLogo size="md" showPulse />
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
         <p className="text-muted-foreground text-sm">Loading document…</p>
-        <div className="w-56 h-1.5 bg-secondary rounded-full overflow-hidden">
-          <div className="h-full w-1/2 bg-gradient-to-r from-primary to-purple-600 rounded-full animate-pulse" />
-        </div>
       </div>
     );
   }
@@ -69,7 +69,11 @@ const DocumentReader: React.FC = () => {
   // In PDF mode the skip buttons navigate pages; in text mode they navigate paragraphs.
   const isPdfMode = !!pdfUrl;
   const overlayParagraphIndex = isPdfMode ? currentTTSPage : currentParagraphIndex;
-  const overlayTotalParagraphs = isPdfMode ? pageData.length : paragraphs.length;
+  // For PDFs, prefer storedPages count (available immediately after doc load) over
+  // pageData count (only available after pdf.js finishes extraction).
+  const overlayTotalParagraphs = isPdfMode
+    ? (storedPages.length > 0 ? storedPages.length : pageData.length)
+    : paragraphs.length;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">

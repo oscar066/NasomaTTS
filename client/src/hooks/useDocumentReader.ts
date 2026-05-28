@@ -15,6 +15,8 @@ export interface ReaderState {
   currentWordIndex: number;
   /** Absolute word index across all paragraphs in the current page — used for PDF highlight. */
   absoluteWordIdx: number;
+  /** Total words on this page (PyMuPDF count) — used to proportionally map to pdf.js positions. */
+  totalWordsOnPage: number;
   wordWindow: string[];
   windowStart: number;
   voice: string;
@@ -31,14 +33,26 @@ export interface ReaderState {
 
 /**
  * Map the current TTS position to an index into pageData[page].words.
- * Uses absoluteWordIdx (from SSE) so the index is engine-agnostic.
+ *
+ * TTS text comes from PyMuPDF; word positions come from pdf.js. The two
+ * engines may produce slightly different word counts for the same page, so
+ * we use a proportional mapping:
+ *
+ *   pdfJsIdx = round( (absoluteWordIdx / totalWordsOnPage) * pdfjsWordCount )
+ *
+ * This keeps the highlight in the right area even when counts diverge by a
+ * few percent (typical for real-world PDFs).
  */
 function computeHighlightWordIdx(state: ReaderState): number {
   if (state.currentTTSPage < 0 || state.absoluteWordIdx < 0) return -1;
   const page = state.pageData[state.currentTTSPage];
-  if (!page) return -1;
-  // Clamp: PyMuPDF and pdf.js may count words slightly differently.
-  return Math.min(state.absoluteWordIdx, page.words.length - 1);
+  if (!page || page.words.length === 0) return -1;
+
+  const total = state.totalWordsOnPage;
+  if (total <= 0) return -1;
+
+  const fraction = state.absoluteWordIdx / total;
+  return Math.min(Math.round(fraction * page.words.length), page.words.length - 1);
 }
 
 export const useDocumentReader = () => {
@@ -56,6 +70,7 @@ export const useDocumentReader = () => {
     currentParagraphIndex: -1,
     currentWordIndex: -1,
     absoluteWordIdx: -1,
+    totalWordsOnPage: 0,
     wordWindow: [],
     windowStart: 0,
     voice: "",
@@ -144,7 +159,13 @@ export const useDocumentReader = () => {
         const cached = localStorage.getItem("currentDocument");
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (parsed.id === documentId) {
+          // Only use the cache when the ID matches AND, for PDF documents,
+          // the pages field is already stored.  An old cache entry without
+          // pages will trigger a fresh fetch so storedPages is populated.
+          const cacheValid =
+            parsed.id === documentId &&
+            (!parsed.pdf_url || Array.isArray(parsed.pages));
+          if (cacheValid) {
             update({
               docName: parsed.title,
               text: parsed.content,
@@ -250,6 +271,7 @@ export const useDocumentReader = () => {
                   currentParagraphIndex: paragraphOffset + data.paragraphIndex,
                   currentWordIndex: -1,
                   absoluteWordIdx: data.absoluteWordIndex ?? -1,
+                  totalWordsOnPage: data.totalWords ?? 0,
                   wordWindow: [],
                   windowStart: 0,
                 });
@@ -260,6 +282,7 @@ export const useDocumentReader = () => {
                   windowStart: data.windowStart,
                   currentWordIndex: data.currentWordIndex,
                   absoluteWordIdx: data.absoluteWordIndex ?? -1,
+                  totalWordsOnPage: data.totalWords ?? 0,
                 });
               }
             } catch {}
@@ -293,32 +316,43 @@ export const useDocumentReader = () => {
   // ── PDF page-by-page TTS ──────────────────────────────────────────────────
 
   const playPage = (startIdx: number) => {
-    const { storedPages, pageData, voice, speed, ttsAvailable } = stateRef.current;
+    const { storedPages, voice, speed, ttsAvailable, text } = stateRef.current;
 
-    // ── Pick text source ──────────────────────────────────────────────────
-    // Prefer server-stored pages (PyMuPDF, no indexing delay).
-    // Fall back to pdf.js extraction for legacy documents that predate the pages field.
-    const useStored = storedPages.length > 0;
+    // ── No stored pages (legacy document) ────────────────────────────────
+    // Documents uploaded before per-page server extraction was added don't
+    // have storedPages.  Fall back to reading the full document text as a
+    // single TTS stream so playback still works; the highlight overlay will
+    // show on page 0 only, which is the best we can do without page boundaries.
+    if (storedPages.length === 0) {
+      if (!text.trim()) { handleStop(); return; }
+      update({
+        currentTTSPage: 0,
+        currentParagraphIndex: -1,
+        currentWordIndex: -1,
+        absoluteWordIdx: -1,
+        wordWindow: [],
+        windowStart: 0,
+        isPlaying: true,
+        error: "",
+      });
+      openStream(text, voice, speed, 0);
+      if (!ttsAvailable) startBrowserAudio(text, voice, speed);
+      return;
+    }
 
-    // Advance past pages with no text.
+    // ── Stored pages: page-by-page synthesis ─────────────────────────────
+    // Advance past blank pages.
     let idx = startIdx;
-    while (idx < (useStored ? storedPages.length : pageData.length)) {
-      const pageText = useStored
-        ? storedPages[idx].text
-        : pageData[idx]?.paragraphs.join("\n\n");
-      if (pageText?.trim()) break;
+    while (idx < storedPages.length && !storedPages[idx].text.trim()) {
       idx++;
     }
 
-    const limit = useStored ? storedPages.length : pageData.length;
-    if (idx >= limit) {
+    if (idx >= storedPages.length) {
       handleStop();
       return;
     }
 
-    const pageText = useStored
-      ? storedPages[idx].text
-      : pageData[idx].paragraphs.join("\n\n");
+    const pageText = storedPages[idx].text;
 
     update({
       currentTTSPage: idx,
@@ -346,8 +380,10 @@ export const useDocumentReader = () => {
     if (state.pdfUrl) {
       const hasStored = state.storedPages.length > 0;
       const hasIndexed = state.pageData.length > 0;
+      const hasText   = !!state.text.trim();
 
-      if (!hasStored && !hasIndexed) {
+      // Require at least one text source before starting.
+      if (!hasStored && !hasIndexed && !hasText) {
         update({ error: "PDF is still loading — please wait a moment." });
         return;
       }

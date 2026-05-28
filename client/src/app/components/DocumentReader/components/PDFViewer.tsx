@@ -202,12 +202,19 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     pageDataRef.current[pageIndex] = data;
     pagesLoadedRef.current += 1;
 
+    // ── Incremental notify ──────────────────────────────────────────────────
+    // Push the updated array after *each* page so the highlight overlay can
+    // work on already-extracted pages while the rest are still being processed.
+    // Entries for pages not yet extracted are `undefined`; both PDFViewer and
+    // useDocumentReader guard against that with optional-chaining / null checks.
+    const currentPages = [...pageDataRef.current];
+    setPageData(currentPages);
+    onPagesReady?.(currentPages);
+
+    // Save the full position cache only once every page has been extracted so
+    // the cached array is never incomplete.
     if (pagesLoadedRef.current === numPagesRef.current) {
-      const allPages = [...pageDataRef.current];
-      setPageData(allPages);
-      onPagesReady?.(allPages);
-      // Persist positions so the next open of this document is instant.
-      savePositionCache(url, allPages);
+      savePositionCache(url, currentPages);
     }
   };
 
