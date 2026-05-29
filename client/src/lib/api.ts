@@ -59,6 +59,7 @@ export interface Document {
   title: string;
   content: string;
   pdf_url?: string | null;
+  thumbnail_url?: string | null;
   pages?: StoredPage[] | null;
   author: { id: string; username: string; email: string };
   createdAt: string;
@@ -78,7 +79,7 @@ export const documentsApi = {
   get: (id: string, token?: string) =>
     request<Document>(`/documents/${id}`, {}, token),
 
-  create: (body: { title: string; content: string; pdf_url?: string | null; pages?: StoredPage[] | null }, token: string) =>
+  create: (body: { title: string; content: string; pdf_url?: string | null; thumbnail_url?: string | null; pages?: StoredPage[] | null }, token: string) =>
     request<Document>("/documents/", {
       method: "POST",
       body: JSON.stringify(body),
@@ -94,7 +95,7 @@ export const pdfApi = {
   upload: (file: File, token: string) => {
     const form = new FormData();
     form.append("pdf", file);
-    return request<{ title: string; content: string; pdf_url: string | null; pages: StoredPage[]; message: string }>(
+    return request<{ title: string; content: string; pdf_url: string | null; thumbnail_url: string | null; pages: StoredPage[]; message: string }>(
       "/pdf/upload",
       { method: "POST", body: form },
       token
@@ -118,6 +119,10 @@ export const voicesApi = {
 
 export function pdfProxyUrl(docId: string): string {
   return `${BASE}/pdf/${docId}`;
+}
+
+export function thumbnailProxyUrl(docId: string): string {
+  return `${BASE}/pdf/${docId}/thumbnail`;
 }
 
 // ── Speak (POST → streaming SSE response) ────────────────────────────────────

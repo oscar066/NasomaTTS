@@ -100,6 +100,16 @@ const DocumentReader: React.FC = () => {
           </h1>
         </div>
 
+        {overlayTotalParagraphs > 0 && (
+          <div className="flex items-center gap-1 flex-shrink-0 text-xs font-mono tabular-nums text-muted-foreground">
+            <span className="text-foreground font-semibold">
+              {Math.max(1, (overlayParagraphIndex >= 0 ? overlayParagraphIndex : 0) + 1)}
+            </span>
+            <span>/</span>
+            <span>{overlayTotalParagraphs}</span>
+          </div>
+        )}
+
         {isPlaying && (
           <div className="flex items-center gap-1.5 flex-shrink-0 text-xs text-primary font-medium">
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />

@@ -47,7 +47,7 @@ export function TopBar({ onToggleSidebar }: TopBarProps) {
 
   return (
     // h-14 matches the sidebar logo section exactly so the dividing line aligns
-    <header className="h-14 flex items-center bg-background border-b border-border flex-shrink-0 px-4 gap-3">
+    <header className="h-14 flex items-center bg-muted border-b border-border flex-shrink-0 px-4 gap-3">
       {/* Sidebar toggle */}
       <Button
         variant="ghost"

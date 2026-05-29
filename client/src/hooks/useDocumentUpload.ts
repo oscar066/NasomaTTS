@@ -26,10 +26,10 @@ export const useDocumentUpload = () => {
       setIsLoading(true);
       setError(null);
 
-      const { content, pdf_url, pages } = await pdfApi.upload(file, token);
+      const { content, pdf_url, thumbnail_url, pages } = await pdfApi.upload(file, token);
       const title = file.name.replace(/\.[^/.]+$/, "");
 
-      return await documentsApi.create({ title, content, pdf_url, pages }, token);
+      return await documentsApi.create({ title, content, pdf_url, thumbnail_url, pages }, token);
     } catch (err: any) {
       const msg = err.message || "An error occurred during upload";
       setError(msg);

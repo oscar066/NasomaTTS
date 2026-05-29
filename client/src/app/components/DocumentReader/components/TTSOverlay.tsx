@@ -195,12 +195,6 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
               +
             </Button>
 
-            <span className="text-muted-foreground text-xs font-mono tabular-nums hidden sm:block ml-1">
-              {totalParagraphs > 0
-                ? `${Math.max(1, currentParagraphIndex + 1)} / ${totalParagraphs}`
-                : "—"}
-            </span>
-
             <Button
               variant="ghost"
               size="icon"

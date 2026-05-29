@@ -70,7 +70,7 @@ export default function Sidebar({ isOpen }: SidebarProps) {
   return (
     <aside
       className={`
-        flex flex-col bg-background border-r border-border
+        flex flex-col bg-muted border-r border-border
         transition-all duration-300 overflow-hidden flex-shrink-0
         ${isOpen ? "w-64" : "w-16"}
       `}
