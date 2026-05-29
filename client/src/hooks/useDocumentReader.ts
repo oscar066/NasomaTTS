@@ -162,8 +162,13 @@ export const useDocumentReader = () => {
           // Only use the cache when the ID matches AND, for PDF documents,
           // the pages field is already stored.  An old cache entry without
           // pages will trigger a fresh fetch so storedPages is populated.
+          // "pdf_url" key missing entirely = old cache entry (pre-PDF feature); safe to use.
+          // "pdf_url" key present but null = MinIO upload failed at ingest time; force re-fetch
+          //   so the viewer picks up a valid URL if the document was re-uploaded since.
+          const pdfUrlMissing = !("pdf_url" in parsed);
           const cacheValid =
             parsed.id === documentId &&
+            (pdfUrlMissing || parsed.pdf_url !== null) &&
             (!parsed.pdf_url || Array.isArray(parsed.pages));
           if (cacheValid) {
             update({

@@ -6,7 +6,7 @@ import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import { Skeleton } from "@/components/ui/skeleton";
 
-pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
 
 // ── Position cache (sessionStorage) ─────────────────────────────────────────
 // Word positions are expensive to extract from pdf.js. Cache them for the
@@ -277,6 +277,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                 <Page
                   pageNumber={i + 1}
                   width={containerWidth || 800}
+                  renderMode="canvas"
                   renderTextLayer
                   renderAnnotationLayer
                   className="shadow-lg"
