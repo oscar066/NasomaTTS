@@ -57,3 +57,26 @@ class DocumentCreate(BaseModel):
     pdf_url: str | None = None
     thumbnail_url: str | None = None  # MinIO key for the first-page JPEG thumbnail.
     pages: list | None = None         # [{"page_number": int, "text": str}]
+
+
+class DocumentRename(BaseModel):
+    """Payload for ``PATCH /documents/{doc_id}/rename``.
+
+    Attributes:
+        title: New human-readable title for the document (max 200 characters
+            enforced in the route handler).
+    """
+
+    title: str
+
+
+class ProgressUpdate(BaseModel):
+    """Payload for ``PATCH /documents/{doc_id}/progress``.
+
+    Attributes:
+        current_page: 0-based index of the most recently reached page.
+            Pass ``total_pages`` (= ``len(pages)``) to mark the document
+            as fully read so the dashboard shows 100 %.
+    """
+
+    current_page: int

@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..db.database import get_db
 from ..deps import get_current_user
-from ..schemas.schema import DocumentCreate
+from ..schemas.schema import DocumentCreate, DocumentRename, ProgressUpdate
 from ..utils.logger import setup_logger
 
 logger = setup_logger("nasoma.routes.documents")
@@ -54,9 +54,9 @@ def _fmt_doc(doc: dict, author: dict) -> dict:
         "content": doc["content"],
         "pdf_url": doc.get("pdf_url"),
         "thumbnail_url": doc.get("thumbnail_url"),
-        # ``pages`` is None for legacy/text-only documents uploaded before
         # per-page server extraction was introduced.
         "pages": doc.get("pages"),
+        "current_page": doc.get("current_page", 0),
         "author": author,
         "createdAt": doc["createdAt"],
         "updatedAt": doc["updatedAt"],
@@ -153,6 +153,7 @@ async def create_document(
             "pdf_url": data.pdf_url,
             "thumbnail_url": data.thumbnail_url,
             "pages": data.pages,
+            "current_page": 0,
             "author": current_user["_id"],
             "createdAt": now,
             "updatedAt": now,
@@ -205,3 +206,87 @@ async def delete_document(
     await db.documents.delete_one({"_id": oid})
     logger.info("Document deleted: id=%s by user=%s", doc_id, current_user["_id"])
     return {"success": True}
+
+
+@router.patch("/{doc_id}/rename")
+async def rename_document(
+    doc_id: str,
+    data: DocumentRename,
+    current_user=Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Rename a document.
+
+    Only the document's author may rename it.
+
+    Raises:
+        HTTPException 400: If ``doc_id`` is not a valid ObjectId or the new
+            title is empty / exceeds 200 characters.
+        HTTPException 404: If no document with that ID exists.
+        HTTPException 403: If the authenticated user is not the document's author.
+    """
+    if not data.title or not data.title.strip():
+        raise HTTPException(status_code=400, detail="Title cannot be empty")
+    if len(data.title) > 200:
+        raise HTTPException(status_code=400, detail="Title too long (max 200 characters)")
+
+    try:
+        oid = ObjectId(doc_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid document ID")
+
+    doc = await db.documents.find_one({"_id": oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc["author"] != current_user["_id"]:
+        raise HTTPException(status_code=403, detail="Not authorized to rename this document")
+
+    new_title = data.title.strip()
+    await db.documents.update_one(
+        {"_id": oid},
+        {"$set": {"title": new_title, "updatedAt": datetime.utcnow()}},
+    )
+    logger.info("Document renamed: id=%s title=%r user=%s", doc_id, new_title, current_user["_id"])
+    return {"success": True, "title": new_title}
+
+
+@router.patch("/{doc_id}/progress")
+async def update_progress(
+    doc_id: str,
+    data: ProgressUpdate,
+    current_user=Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Persist the user's reading position for a document.
+
+    Called by the client whenever the TTS engine advances to a new page and
+    when playback stops.  The stored ``current_page`` is returned with every
+    document response so the dashboard can display an accurate progress ring.
+
+    Args:
+        doc_id: MongoDB ObjectId of the target document.
+        data: ``{ current_page: int }`` — 0-based page index.  Pass
+            ``len(pages)`` (= total pages) to mark the document as finished.
+
+    Raises:
+        HTTPException 400: If ``doc_id`` is not a valid ObjectId.
+        HTTPException 404: If no document with that ID exists.
+        HTTPException 403: If the authenticated user is not the document's author.
+    """
+    try:
+        oid = ObjectId(doc_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid document ID")
+
+    doc = await db.documents.find_one({"_id": oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc["author"] != current_user["_id"]:
+        raise HTTPException(status_code=403, detail="Not authorized to update this document")
+
+    await db.documents.update_one(
+        {"_id": oid},
+        {"$set": {"current_page": data.current_page, "updatedAt": datetime.utcnow()}},
+    )
+    logger.debug("Progress saved: doc=%s page=%d user=%s", doc_id, data.current_page, current_user["_id"])
+    return {"success": True, "current_page": data.current_page}

@@ -111,9 +111,16 @@ async def speak(request: Request, payload: SpeakRequest):
 
             # Emit a paragraph-boundary event first so the client can reset
             # its highlight state before individual word events arrive.
-            yield (
-                f"data: {json.dumps({'paragraphIndex': p_idx, 'currentWordIndex': -1, 'absoluteWordIndex': abs_word_idx, 'wordWindow': [], 'windowStart': 0, 'fullParagraph': ' '.join(words), 'newParagraph': True})}\n\n"
-            )
+            para_payload = json.dumps({
+                'paragraphIndex': p_idx,
+                'currentWordIndex': -1,
+                'absoluteWordIndex': abs_word_idx,
+                'wordWindow': [],
+                'windowStart': 0,
+                'fullParagraph': ' '.join(words),
+                'newParagraph': True,
+            })
+            yield f"data: {para_payload}\n\n"
 
             for word_idx in range(len(words)):
                 if await request.is_disconnected():
@@ -124,9 +131,17 @@ async def speak(request: Request, payload: SpeakRequest):
                 start = max(0, word_idx - half)
                 end = min(len(words) - 1, word_idx + half)
 
-                yield (
-                    f"data: {json.dumps({'paragraphIndex': p_idx, 'currentWordIndex': word_idx, 'absoluteWordIndex': abs_word_idx, 'currentWord': words[word_idx], 'wordWindow': words[start:end + 1], 'windowStart': start, 'fullParagraph': ' '.join(words), 'newParagraph': False})}\n\n"
-                )
+                payload = json.dumps({
+                    'paragraphIndex': p_idx,
+                    'currentWordIndex': word_idx,
+                    'absoluteWordIndex': abs_word_idx,
+                    'currentWord': words[word_idx],
+                    'wordWindow': words[start:end + 1],
+                    'windowStart': start,
+                    'fullParagraph': ' '.join(words),
+                    'newParagraph': False,
+                })
+                yield f"data: {payload}\n\n"
 
                 abs_word_idx += 1
                 await asyncio.sleep(ms_per_word / 1000)
