@@ -126,8 +126,8 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
                 <SelectValue placeholder="Voice" />
               </SelectTrigger>
               <SelectContent>
-                {voices.map((v) => (
-                  <SelectItem key={v.id} value={v.id} className="text-xs">
+                {voices.map((v, i) => (
+                  <SelectItem key={`${v.id}-${i}`} value={v.id} className="text-xs">
                     {v.label}
                   </SelectItem>
                 ))}
