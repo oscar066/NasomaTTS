@@ -125,7 +125,7 @@ async def speak(request: Request, payload: SpeakRequest):
                 end = min(len(words) - 1, word_idx + half)
 
                 yield (
-                    f"data: {json.dumps({'paragraphIndex': p_idx, 'currentWordIndex': word_idx, 'absoluteWordIndex': abs_word_idx, 'wordWindow': words[start:end + 1], 'windowStart': start, 'fullParagraph': ' '.join(words), 'newParagraph': False})}\n\n"
+                    f"data: {json.dumps({'paragraphIndex': p_idx, 'currentWordIndex': word_idx, 'absoluteWordIndex': abs_word_idx, 'currentWord': words[word_idx], 'wordWindow': words[start:end + 1], 'windowStart': start, 'fullParagraph': ' '.join(words), 'newParagraph': False})}\n\n"
                 )
 
                 abs_word_idx += 1
