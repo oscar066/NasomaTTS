@@ -30,8 +30,8 @@ export const useDocumentUpload = () => {
       const title = file.name.replace(/\.[^/.]+$/, "");
 
       return await documentsApi.create({ title, content, pdf_url, thumbnail_url, pages }, token);
-    } catch (err: any) {
-      const msg = err.message || "An error occurred during upload";
+    } catch (err: unknown) {
+      const msg = (err as Error)?.message || "An error occurred during upload";
       setError(msg);
       if (msg.toLowerCase().includes("unauthorized")) {
         router.push("/auth/login");
