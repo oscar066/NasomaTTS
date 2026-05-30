@@ -68,11 +68,15 @@ export default function PricingSection() {
   const [isYearly, setIsYearly] = useState(false);
 
   return (
-    <section id="pricing" className="py-24 bg-background">
-      <div className="container mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
-          <p className="text-lg text-muted-foreground">
+    <section id="pricing" className="py-16 bg-secondary/20 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_100%,rgba(99,102,241,0.06),transparent)] pointer-events-none" />
+      <div className="container mx-auto px-4 relative">
+        <div className="text-center mb-10">
+          <span className="inline-block text-xs font-semibold tracking-widest uppercase text-primary mb-4 bg-primary/10 px-3 py-1.5 rounded-full">
+            Pricing
+          </span>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
+          <p className="text-base text-muted-foreground">
             Start free and upgrade as you grow. No hidden fees.
           </p>
 

@@ -30,12 +30,10 @@ export default function Header() {
       }`}
     >
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-        {/* Logo */}
         <Link href="/">
           <NasomaLogo size="sm" showText />
         </Link>
 
-        {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-1">
           {navLinks.map((link) => (
             <Link
@@ -61,7 +59,6 @@ export default function Header() {
             </Button>
           </Link>
 
-          {/* Mobile menu toggle */}
           <button
             className="md:hidden text-foreground p-1"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -72,7 +69,6 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Mobile menu */}
       {mobileMenuOpen && (
         <div className="md:hidden py-3 px-4 bg-background border-b border-primary/10 animate-in slide-in-from-top">
           <nav className="flex flex-col space-y-1">

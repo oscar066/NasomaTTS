@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Star } from "lucide-react";
+import { Star, ArrowRight } from "lucide-react";
 
 const testimonials = [
   {
@@ -10,6 +10,7 @@ const testimonials = [
     company: "TechTalk Podcast",
     initials: "SJ",
     color: "#6366f1",
+    topAccent: "from-violet-400 to-purple-500",
   },
   {
     quote:
@@ -19,6 +20,7 @@ const testimonials = [
     company: "LearnSmart",
     initials: "MC",
     color: "#0ea5e9",
+    topAccent: "from-sky-400 to-blue-500",
   },
   {
     quote:
@@ -28,14 +30,15 @@ const testimonials = [
     company: "GlobalTech Solutions",
     initials: "ER",
     color: "#10b981",
+    topAccent: "from-emerald-400 to-teal-500",
   },
 ];
 
 function StarRating() {
   return (
-    <div className="flex gap-0.5 mb-4">
+    <div className="flex gap-0.5 mb-5">
       {[...Array(5)].map((_, i) => (
-        <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+        <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
       ))}
     </div>
   );
@@ -43,68 +46,71 @@ function StarRating() {
 
 export default function TestimonialsSection() {
   return (
-    <section id="testimonials" className="py-24 bg-background relative">
-      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
+    <section id="testimonials" className="py-16 bg-background relative overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(99,102,241,0.06),transparent)] pointer-events-none" />
 
-      <div className="container mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold mb-4">Loved by Readers</h2>
-          <p className="text-lg text-muted-foreground">
+      <div className="container mx-auto px-4 relative">
+        <div className="text-center mb-10 max-w-2xl mx-auto">
+          <span className="inline-block text-xs font-semibold tracking-widest uppercase text-primary mb-4 bg-primary/10 px-3 py-1.5 rounded-full">
+            Testimonials
+          </span>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Loved by Readers</h2>
+          <p className="text-base text-muted-foreground">
             Join thousands who have transformed how they consume content.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
           {testimonials.map((testimonial, index) => (
             <div
               key={index}
-              className="p-8 rounded-xl bg-card border border-border hover:border-primary/50
-                         transition-all duration-300 hover:shadow-lg flex flex-col"
+              className="relative flex flex-col rounded-2xl bg-card border border-border overflow-hidden
+                         hover:shadow-xl hover:border-primary/20 transition-all duration-300 hover:-translate-y-1"
             >
-              <StarRating />
+              {/* Colorful top accent bar */}
+              <div className={`h-1 w-full bg-gradient-to-r ${testimonial.topAccent}`} />
 
-              <p className="text-muted-foreground leading-relaxed flex-1 mb-6">
-                &ldquo;{testimonial.quote}&rdquo;
-              </p>
-
-              <div className="flex items-center pt-6 border-t border-border">
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                  style={{ backgroundColor: testimonial.color }}
-                >
-                  {testimonial.initials}
+              <div className="p-8 flex flex-col flex-1">
+                {/* Decorative quote mark */}
+                <div className="absolute top-6 right-6 text-7xl leading-none font-serif text-border select-none">
+                  &ldquo;
                 </div>
-                <div className="ml-3">
-                  <p className="font-semibold text-sm">{testimonial.author}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {testimonial.role},{" "}
-                    <span className="text-primary">{testimonial.company}</span>
-                  </p>
+
+                <StarRating />
+
+                <p className="text-foreground/80 leading-relaxed flex-1 mb-8 text-sm relative z-10">
+                  &ldquo;{testimonial.quote}&rdquo;
+                </p>
+
+                <div className="flex items-center gap-3 pt-6 border-t border-border">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 shadow-sm"
+                    style={{ backgroundColor: testimonial.color }}
+                  >
+                    {testimonial.initials}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-foreground">{testimonial.author}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {testimonial.role},{" "}
+                      <span className="text-primary font-medium">{testimonial.company}</span>
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
           ))}
         </div>
 
-        <div className="text-center mt-12">
+        <div className="text-center mt-10">
           <Link
             href="/auth/signup"
-            className="inline-flex items-center px-6 py-3 bg-primary text-primary-foreground
-                       rounded-full hover:bg-primary/90 transition-colors font-medium"
+            className="inline-flex items-center gap-2 px-7 py-3.5 bg-primary text-primary-foreground
+                       rounded-full hover:bg-primary/90 transition-all duration-200 font-semibold text-sm
+                       shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
           >
             Join Our Community
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5 ml-2"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </div>

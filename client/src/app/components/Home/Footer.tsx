@@ -106,10 +106,7 @@ export default function Footer() {
             <p className="text-sm text-muted-foreground mb-3">
               Get product updates and TTS news — no spam.
             </p>
-            <form
-              onSubmit={(e) => e.preventDefault()}
-              className="flex flex-col sm:flex-row gap-2"
-            >
+            <form onSubmit={(e) => e.preventDefault()} className="flex gap-2">
               <div className="relative flex-1">
                 <Mail className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <input
@@ -128,7 +125,7 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* Divider */}
+        {/* Bottom bar */}
         <div className="border-t border-border pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-xs text-muted-foreground">
             © {YEAR} Nasoma. All rights reserved.

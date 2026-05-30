@@ -4,7 +4,6 @@ import HowItWorksSection from "./HowItWorksSection";
 import FeaturesSection from "./FeaturesSection";
 import TestimonialsSection from "./TestimonialsSection";
 import PricingSection from "./PricingSection";
-import FinalCTA from "./FinalCTA";
 import Footer from "./Footer";
 
 export default function Home() {
@@ -17,7 +16,6 @@ export default function Home() {
         <HowItWorksSection />
         <TestimonialsSection />
         <PricingSection />
-        <FinalCTA />
       </main>
       <Footer />
     </div>
