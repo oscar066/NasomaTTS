@@ -61,6 +61,8 @@ export interface Document {
   pdf_url?: string | null;
   thumbnail_url?: string | null;
   pages?: StoredPage[] | null;
+  /** Last page the user reached (0-based). Set to pages.length for 100 %. */
+  current_page?: number;
   author: { id: string; username: string; email: string };
   createdAt: string;
   updatedAt: string;
@@ -87,6 +89,25 @@ export const documentsApi = {
 
   delete: (id: string, token: string) =>
     request<{ success: boolean }>(`/documents/${id}`, { method: "DELETE" }, token),
+
+  rename: (id: string, title: string, token: string) =>
+    request<{ success: boolean; title: string }>(
+      `/documents/${id}/rename`,
+      { method: "PATCH", body: JSON.stringify({ title }) },
+      token
+    ),
+
+  /**
+   * Persist the user's reading position.  Fire-and-forget — the caller should
+   * not await this and should swallow errors so a network hiccup never interrupts
+   * playback.
+   */
+  saveProgress: (id: string, currentPage: number, token: string) =>
+    request<{ success: boolean; current_page: number }>(
+      `/documents/${id}/progress`,
+      { method: "PATCH", body: JSON.stringify({ current_page: currentPage }) },
+      token
+    ),
 };
 
 // ── PDF

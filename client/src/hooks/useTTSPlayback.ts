@@ -19,12 +19,19 @@
  */
 
 import { useState, useRef, useEffect } from "react";
-import { speakStream, StoredPage } from "@/lib/api";
+import { speakStream, documentsApi, StoredPage } from "@/lib/api";
+import { saveLocalProgress } from "@/lib/progress";
 
 // ── Public types
 
 /** Values this hook reads from the wider application state. */
 export interface TTSPlaybackDeps {
+  /** Document ID — used to persist reading progress. */
+  docId: string;
+  /** Bearer token — used to authenticate progress saves. */
+  token: string | undefined;
+  /** 0-based page to resume playback from on first play. */
+  initialPage: number;
   storedPages: StoredPage[];
   text: string;
   paragraphs: string[];
@@ -79,12 +86,53 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
   const depsRef = useRef(deps);
   depsRef.current = deps;
 
-  const synthRef  = useRef<SpeechSynthesisUtterance | null>(null);
-  const abortRef  = useRef<AbortController | null>(null);
+  const synthRef    = useRef<SpeechSynthesisUtterance | null>(null);
+  const abortRef    = useRef<AbortController | null>(null);
   const playPageRef = useRef<((idx: number) => void) | null>(null);
+
+  /**
+   * The page to start/resume from.  Initialised from `deps.initialPage` and
+   * updated whenever the user stops playback mid-document so the next play
+   * resumes from the same spot.
+   */
+  const resumePageRef = useRef(deps.initialPage ?? 0);
+
+  /**
+   * Tracks the page that is *actively being played* — written synchronously
+   * by `playPage` the instant a page starts, so `handleStop` can always read
+   * the true current page without depending on React state (which lags one
+   * render behind).
+   */
+  const currentPageRef = useRef<number>(-1);
+
+  // When the document loads (initialPage arrives after async fetch), sync the
+  // resume pointer and pre-scroll the PDF viewer to the saved page.
+  useEffect(() => {
+    const page = deps.initialPage ?? 0;
+    resumePageRef.current = page;
+    // Setting currentTTSPage causes PDFViewer to scroll to the saved page
+    // even before the user presses play.
+    if (page > 0) update({ currentTTSPage: page });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deps.initialPage]);
 
   const update = (patch: Partial<PlaybackState>) =>
     setState((prev) => ({ ...prev, ...patch }));
+
+  // ── Progress persistence ──────────────────────────────────────────────────
+
+  /**
+   * Save the current page to both localStorage (instant) and the backend
+   * (cross-device sync, fire-and-forget).  Never throws.
+   */
+  const persistProgress = (page: number) => {
+    const { docId, token } = depsRef.current;
+    if (!docId) return;
+    saveLocalProgress(docId, page);
+    if (token) {
+      documentsApi.saveProgress(docId, page, token).catch(() => {});
+    }
+  };
 
   // ── Cleanup on unmount
 
@@ -199,6 +247,7 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     // Legacy documents (no storedPages) — fall back to reading full text.
     if (storedPages.length === 0) {
       if (!text.trim()) { handleStop(); return; }
+      currentPageRef.current = 0;
       update({
         currentTTSPage: 0,
         currentParagraphIndex: -1,
@@ -219,9 +268,19 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     while (idx < storedPages.length && !storedPages[idx].text.trim()) {
       idx++;
     }
-    if (idx >= storedPages.length) { handleStop(); return; }
+    if (idx >= storedPages.length) {
+      // All pages read — mark document as 100 % complete.
+      persistProgress(storedPages.length);
+      handleStop();
+      return;
+    }
 
     const pageText = storedPages[idx].text;
+
+    // Write synchronously so handleStop always knows which page is active,
+    // even before the React state update (setState) has re-rendered.
+    currentPageRef.current = idx;
+
     update({
       currentTTSPage: idx,
       currentParagraphIndex: -1,
@@ -232,6 +291,9 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
       isPlaying: true,
       error: "",
     });
+
+    // Save progress each time a new page starts playing.
+    persistProgress(idx);
 
     openStream(pageText, voice, speed, 0, () => playPageRef.current?.(idx + 1));
     if (!ttsAvailable) startBrowserAudio(pageText, voice, speed);
@@ -258,7 +320,8 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
         update({ error: "PDF is still loading — please wait a moment." });
         return;
       }
-      playPage(0);
+      // Resume from the last saved page (or 0 for a fresh start).
+      playPage(resumePageRef.current);
       return;
     }
 
@@ -269,6 +332,15 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
   };
 
   const handleStop = () => {
+    // currentPageRef is written synchronously by playPage so it is always
+    // up-to-date regardless of whether React has re-rendered yet.
+    const page = currentPageRef.current;
+    if (page >= 0) {
+      resumePageRef.current = page;
+      persistProgress(page);
+    }
+    currentPageRef.current = -1;
+
     abortRef.current?.abort();
     abortRef.current = null;
     if (typeof window !== "undefined" && window.speechSynthesis) {

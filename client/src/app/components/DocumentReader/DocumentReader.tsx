@@ -27,6 +27,7 @@ import NasomaLogo from "../Logo/nasoma-logo";
 import TTSOverlay            from "./components/TTSOverlay";
 import DocumentReaderHeader  from "./components/DocumentReaderHeader";
 import TextReader            from "./components/TextReader";
+import AIActionsSidebar      from "./components/AIActionsSidebar";
 import { useDocumentReader } from "@/hooks/useDocumentReader";
 
 const PDFViewer = dynamic(() => import("./components/PDFViewer"), {
@@ -162,6 +163,9 @@ const DocumentReader: React.FC = () => {
 
         )}
       </main>
+
+      {/* ── AI feature sidebar ── */}
+      <AIActionsSidebar />
 
       {/* ── Floating TTS controls card ── */}
       <TTSOverlay

@@ -107,6 +107,12 @@ export default function Dashboard() {
     setDocuments((prev) => prev.filter((d) => d.id !== deletedId));
   };
 
+  const handleRename = (id: string, newTitle: string) => {
+    setDocuments((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, title: newTitle } : d))
+    );
+  };
+
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -201,7 +207,7 @@ export default function Dashboard() {
           {!loading && documents.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
               {documents.map((doc) => (
-                <FileCard key={doc.id} file={doc} onDelete={handleDelete} />
+                <FileCard key={doc.id} file={doc} onDelete={handleDelete} onRename={handleRename} />
               ))}
             </div>
           )}

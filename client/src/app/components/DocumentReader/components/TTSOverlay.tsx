@@ -171,29 +171,29 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
             </Button>
           </div>
 
-          {/* Right — Speed + progress + collapse */}
+          {/* Right — Speed + collapse */}
           <div className="flex items-center justify-end gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-foreground font-bold text-base"
-              onClick={() => canSlower && onSpeedChange(SPEEDS[speedIdx - 1])}
-              disabled={!canSlower}
-            >
-              −
-            </Button>
-            <span className="text-foreground text-xs font-mono w-9 text-center tabular-nums">
-              {speed}×
-            </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-foreground font-bold text-base"
-              onClick={() => canFaster && onSpeedChange(SPEEDS[speedIdx + 1])}
-              disabled={!canFaster}
-            >
-              +
-            </Button>
+            {/* Speed control pill */}
+            <div className="flex items-center rounded-lg bg-secondary/60 border border-border overflow-hidden">
+              <button
+                onClick={() => canSlower && onSpeedChange(SPEEDS[speedIdx - 1])}
+                disabled={!canSlower}
+                className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-40 font-bold text-base transition-colors"
+              >
+                −
+              </button>
+              <span className="text-foreground text-xs font-mono tabular-nums px-2 border-x border-border select-none">
+                {speed}×
+              </span>
+              <button
+                onClick={() => canFaster && onSpeedChange(SPEEDS[speedIdx + 1])}
+                disabled={!canFaster}
+                className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-40 font-bold text-base transition-colors"
+              >
+                +
+              </button>
+            </div>
+            <span className="text-[9px] text-muted-foreground tabular-nums">{Math.round(150 * speed)} wpm</span>
 
             <Button
               variant="ghost"

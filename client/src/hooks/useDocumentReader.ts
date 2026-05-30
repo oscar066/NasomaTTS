@@ -63,6 +63,9 @@ export const useDocumentReader = () => {
   const doc      = useDocumentLoad();
   const voices   = useVoices();
   const playback = useTTSPlayback({
+    docId:        doc.documentId,
+    token:        doc.token,
+    initialPage:  doc.initialPage,
     storedPages:  doc.storedPages,
     text:         doc.text,
     paragraphs:   doc.paragraphs,
