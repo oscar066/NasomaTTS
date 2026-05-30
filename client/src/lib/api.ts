@@ -24,7 +24,7 @@ async function request<T>(
   return res.json() as Promise<T>;
 }
 
-// ── Auth ────────────────────────────────────────────────────────────────────
+// ── Auth
 
 export const authApi = {
   signup: (body: { username: string; email: string; password: string }) =>
@@ -47,7 +47,7 @@ export const authApi = {
     ),
 };
 
-// ── Documents ───────────────────────────────────────────────────────────────
+// ── Documents
 
 export interface StoredPage {
   page_number: number;
@@ -89,7 +89,7 @@ export const documentsApi = {
     request<{ success: boolean }>(`/documents/${id}`, { method: "DELETE" }, token),
 };
 
-// ── PDF ─────────────────────────────────────────────────────────────────────
+// ── PDF
 
 export const pdfApi = {
   upload: (file: File, token: string) => {
@@ -103,7 +103,7 @@ export const pdfApi = {
   },
 };
 
-// ── Voices ──────────────────────────────────────────────────────────────────
+// ── Voices 
 
 export interface Voice {
   id: string;
@@ -115,7 +115,7 @@ export const voicesApi = {
     request<{ voices: Voice[]; tts_available: boolean }>("/voices/"),
 };
 
-// ── PDF proxy ────────────────────────────────────────────────────────────────
+// ── PDF proxy 
 
 export function pdfProxyUrl(docId: string): string {
   return `${BASE}/pdf/${docId}`;
@@ -125,7 +125,7 @@ export function thumbnailProxyUrl(docId: string): string {
   return `${BASE}/pdf/${docId}/thumbnail`;
 }
 
-// ── Speak (POST → streaming SSE response) ────────────────────────────────────
+// ── Speak (POST → streaming SSE response)
 // Using POST avoids URL-length limits that break long documents with GET params.
 
 export function speakStream(

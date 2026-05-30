@@ -9,6 +9,41 @@ export default {
   ],
   theme: {
   	extend: {
+      keyframes: {
+        'fade-up': {
+          '0%': { opacity: '0', transform: 'translateY(22px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'fade-in-right': {
+          '0%': { opacity: '0', transform: 'translateX(32px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        float: {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%':  { transform: 'translateY(-10px)' },
+        },
+        'pulse-ring': {
+          '0%':   { boxShadow: '0 0 0 0 rgba(99,102,241,0.45)' },
+          '70%':  { boxShadow: '0 0 0 10px rgba(99,102,241,0)' },
+          '100%': { boxShadow: '0 0 0 0 rgba(99,102,241,0)' },
+        },
+        'progress-fill': {
+          '0%':   { width: '0%' },
+          '100%': { width: '17%' },
+        },
+        'orb-drift': {
+          '0%, 100%': { transform: 'scale(1)',    opacity: '1' },
+          '50%':       { transform: 'scale(1.18)', opacity: '0.7' },
+        },
+      },
+      animation: {
+        'fade-up':        'fade-up 0.65s ease-out forwards',
+        'fade-in-right':  'fade-in-right 0.75s ease-out forwards',
+        float:            'float 5s ease-in-out infinite',
+        'pulse-ring':     'pulse-ring 2s ease-out infinite',
+        'progress-fill':  'progress-fill 2.5s ease-out 1.2s forwards',
+        'orb-drift':      'orb-drift 8s ease-in-out infinite',
+      },
   		colors: {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
