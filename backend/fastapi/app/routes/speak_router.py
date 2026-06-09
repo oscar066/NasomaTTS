@@ -122,6 +122,10 @@ async def speak(request: Request, payload: SpeakRequest):
             })
             yield f"data: {para_payload}\n\n"
 
+            # Brief pause so the client can render the paragraph highlight
+            # before the first word event arrives.
+            await asyncio.sleep(ms_per_word / 1000 * 0.4)
+
             for word_idx in range(len(words)):
                 if await request.is_disconnected():
                     return

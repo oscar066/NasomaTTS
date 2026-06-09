@@ -104,21 +104,36 @@ async def upload_pdf_route(
         logger.warning("PDF too large: %d bytes (filename=%s)", len(content), pdf.filename)
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
 
-    # ── Text extraction and thumbnail render via PyMuPDF ─────────────────────
+    # Text extraction and thumbnail render via PyMuPDF
     try:
         fitz_doc = fitz.open(stream=content, filetype="pdf")
-        pages = [
-            {"page_number": i + 1, "text": page.get_text()}
-            for i, page in enumerate(fitz_doc)
-        ]
-        text = "".join(p["text"] for p in pages)
+        pages = []
+        for i, page in enumerate(fitz_doc):
+            # Extract text blocks (≈ paragraphs) sorted in reading order.
+            # block format: (x0, y0, x1, y1, text, block_no, block_type)
+            # block_type 0 = text, 1 = image — we only keep text blocks.
+            raw_blocks = page.get_text("blocks")
+            paragraphs = [
+                {"text": blk[4].strip()}
+                for blk in sorted(raw_blocks, key=lambda b: (round(b[1] / 10), b[0]))
+                if blk[6] == 0 and blk[4].strip()
+            ]
+            # Flat text is the paragraphs joined with double newlines so the
+            # speak router's \n\n split produces the same paragraph list.
+            flat_text = "\n\n".join(p["text"] for p in paragraphs)
+            pages.append({
+                "page_number": i + 1,
+                "text": flat_text,
+                "paragraphs": paragraphs,
+            })
+        text = "\n\n".join(p["text"] for p in pages)
         thumbnail_bytes = _render_thumbnail(fitz_doc)
         fitz_doc.close()
     except Exception as e:
         logger.error("PDF extraction failed for %s: %s", pdf.filename, e)
         raise HTTPException(status_code=500, detail="Error extracting text from PDF")
 
-    # ── MinIO uploads ─────────────────────────────────────────────────────────
+    # ── MinIO uploads
     # Object keys are namespaced by user ID and a shared UUID so the PDF and
     # its thumbnail sit in the same logical "folder" in the bucket.
     pdf_key: str | None = None
@@ -237,9 +252,7 @@ async def serve_pdf(doc_id: str, db=Depends(get_db)):
     if not pdf_key:
         raise HTTPException(status_code=404, detail="No PDF stored for this document")
 
-    # ── Legacy URL normalisation ──────────────────────────────────────────────
-    # Early versions stored full presigned MinIO URLs.  Extract the object key
-    # so we can call get_pdf_stream() with the bare key.
+    # Legacy URL normalisation
     if pdf_key.startswith("http://") or pdf_key.startswith("https://"):
         parsed = urlparse(pdf_key)
         bucket_prefix = f"/{settings.minio_bucket}/"
