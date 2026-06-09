@@ -7,10 +7,10 @@ import { useState, useEffect } from "react";
 import NasomaLogo from "@/app/components/Logo/nasoma-logo";
 
 const navLinks = [
-  { href: "#features", label: "Features" },
   { href: "#how-it-works", label: "How It Works" },
-  { href: "#pricing", label: "Pricing" },
+  { href: "#features", label: "Features" },
   { href: "#testimonials", label: "Testimonials" },
+  { href: "#pricing", label: "Pricing" },
 ];
 
 export default function Header() {

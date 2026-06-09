@@ -1,4 +1,5 @@
 import { Mic, Brain, Globe, Sliders, FileText, Download } from "lucide-react";
+import FadeIn from "@/app/components/ui/FadeIn";
 
 const features = [
   {
@@ -63,22 +64,25 @@ export default function FeaturesSection() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(99,102,241,0.07),transparent)] pointer-events-none" />
 
       <div className="container mx-auto px-4 relative">
-        <div className="text-center mb-10 max-w-2xl mx-auto">
+        <FadeIn className="text-center mb-10 max-w-2xl mx-auto">
           <span className="inline-block text-xs font-semibold tracking-widest uppercase text-primary mb-4 bg-primary/10 px-3 py-1.5 rounded-full">
             Features
           </span>
           <h2 className="text-3xl md:text-4xl font-bold mb-4 text-foreground">
-            Everything You Need
+            Everything{" "}
+            <span className="bg-gradient-to-r from-primary via-violet-500 to-purple-600 bg-clip-text text-transparent">
+              You Need
+            </span>
           </h2>
           <p className="text-base text-muted-foreground leading-relaxed">
             Powerful features designed to make listening effortless.
           </p>
-        </div>
+        </FadeIn>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((feature, index) => (
+            <FadeIn key={index} delay={index * 80}>
             <div
-              key={index}
               className={`group p-7 rounded-2xl bg-card border border-border
                          ${feature.borderHover} hover:shadow-xl ${feature.shadowHover}
                          transition-all duration-300 hover:-translate-y-1`}
@@ -97,6 +101,7 @@ export default function FeaturesSection() {
                 {feature.description}
               </p>
             </div>
+            </FadeIn>
           ))}
         </div>
       </div>

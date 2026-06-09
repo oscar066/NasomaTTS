@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Star, ArrowRight } from "lucide-react";
+import FadeIn from "@/app/components/ui/FadeIn";
 
 const testimonials = [
   {
@@ -50,20 +51,25 @@ export default function TestimonialsSection() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(99,102,241,0.06),transparent)] pointer-events-none" />
 
       <div className="container mx-auto px-4 relative">
-        <div className="text-center mb-10 max-w-2xl mx-auto">
+        <FadeIn className="text-center mb-10 max-w-2xl mx-auto">
           <span className="inline-block text-xs font-semibold tracking-widest uppercase text-primary mb-4 bg-primary/10 px-3 py-1.5 rounded-full">
             Testimonials
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Loved by Readers</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+            Loved by{" "}
+            <span className="bg-gradient-to-r from-primary via-violet-500 to-purple-600 bg-clip-text text-transparent">
+              Readers
+            </span>
+          </h2>
           <p className="text-base text-muted-foreground">
             Join thousands who have transformed how they consume content.
           </p>
-        </div>
+        </FadeIn>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
           {testimonials.map((testimonial, index) => (
+            <FadeIn key={index} delay={index * 100}>
             <div
-              key={index}
               className="relative flex flex-col rounded-2xl bg-card border border-border overflow-hidden
                          hover:shadow-xl hover:border-primary/20 transition-all duration-300 hover:-translate-y-1"
             >
@@ -99,6 +105,7 @@ export default function TestimonialsSection() {
                 </div>
               </div>
             </div>
+            </FadeIn>
           ))}
         </div>
 

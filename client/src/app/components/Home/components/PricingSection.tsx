@@ -4,6 +4,7 @@ import { Check, Sparkles, Star, Building } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import Link from "next/link";
+import FadeIn from "@/app/components/ui/FadeIn";
 
 const plans = [
   {
@@ -71,11 +72,16 @@ export default function PricingSection() {
     <section id="pricing" className="py-16 bg-secondary/20 relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_100%,rgba(99,102,241,0.06),transparent)] pointer-events-none" />
       <div className="container mx-auto px-4 relative">
-        <div className="text-center mb-10">
+        <FadeIn className="text-center mb-10">
           <span className="inline-block text-xs font-semibold tracking-widest uppercase text-primary mb-4 bg-primary/10 px-3 py-1.5 rounded-full">
             Pricing
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+            Simple,{" "}
+            <span className="bg-gradient-to-r from-primary via-violet-500 to-purple-600 bg-clip-text text-transparent">
+              Transparent Pricing
+            </span>
+          </h2>
           <p className="text-base text-muted-foreground">
             Start free and upgrade as you grow. No hidden fees.
           </p>
@@ -105,12 +111,12 @@ export default function PricingSection() {
               </span>
             </span>
           </div>
-        </div>
+        </FadeIn>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           {plans.map((plan, index) => (
+            <FadeIn key={index} delay={index * 100}>
             <div
-              key={index}
               className={`relative flex flex-col p-8 rounded-xl transition-all duration-300 hover:shadow-xl
                 ${
                   plan.highlighted
@@ -172,6 +178,7 @@ export default function PricingSection() {
                 </Button>
               </Link>
             </div>
+            </FadeIn>
           ))}
         </div>
 

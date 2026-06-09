@@ -4,10 +4,10 @@ import { Twitter, Linkedin, Github, Mail } from "lucide-react";
 const YEAR = new Date().getFullYear();
 
 const productLinks = [
-  { href: "#features", label: "Features" },
   { href: "#how-it-works", label: "How It Works" },
-  { href: "#pricing", label: "Pricing" },
+  { href: "#features", label: "Features" },
   { href: "#testimonials", label: "Testimonials" },
+  { href: "#pricing", label: "Pricing" },
 ];
 
 const accountLinks = [

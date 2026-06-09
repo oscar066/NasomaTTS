@@ -1,4 +1,5 @@
 import { Upload, Cpu, Headphones } from "lucide-react";
+import FadeIn from "@/app/components/ui/FadeIn";
 
 const steps = [
   {
@@ -33,15 +34,20 @@ export default function HowItWorksSection() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_100%,rgba(139,92,246,0.06),transparent)] pointer-events-none" />
 
       <div className="container mx-auto px-4 relative">
-        <div className="text-center mb-10 max-w-xl mx-auto">
+        <FadeIn className="text-center mb-10 max-w-xl mx-auto">
           <span className="inline-block text-xs font-semibold tracking-widest uppercase text-primary mb-4 bg-primary/10 px-3 py-1.5 rounded-full">
             How It Works
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Three Simple Steps</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+            Three{" "}
+            <span className="bg-gradient-to-r from-primary via-violet-500 to-purple-600 bg-clip-text text-transparent">
+              Simple Steps
+            </span>
+          </h2>
           <p className="text-base text-muted-foreground">
             From document to audio in three simple steps.
           </p>
-        </div>
+        </FadeIn>
 
         <div className="relative max-w-4xl mx-auto">
           {/* Connecting line (desktop only) */}
@@ -54,8 +60,8 @@ export default function HowItWorksSection() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {steps.map((s, index) => (
+              <FadeIn key={index} delay={index * 120}>
               <div
-                key={index}
                 className="group flex flex-col items-center text-center p-8 rounded-2xl bg-card border border-border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 relative"
               >
                 {/* Step icon */}
@@ -75,6 +81,7 @@ export default function HowItWorksSection() {
                   {s.description}
                 </p>
               </div>
+              </FadeIn>
             ))}
           </div>
         </div>
