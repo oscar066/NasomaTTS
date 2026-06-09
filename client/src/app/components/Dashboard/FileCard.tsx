@@ -121,7 +121,7 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
     if (e.key === "Escape") { e.preventDefault(); cancelRename(); }
   };
 
-  // ── Delete ───────────────────────────────────────────────────────────────────
+  // ── Delete
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -141,22 +141,31 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
     }
   };
 
-  // ── Navigation ───────────────────────────────────────────────────────────────
+  // ── Navigation
 
   const handlePlayClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    localStorage.setItem(
-      "currentDocument",
-      JSON.stringify({
-        id: file.id,
-        content: file.content,
-        title: file.title,
-        pdf_url: file.pdf_url ?? null,
-        thumbnail_url: file.thumbnail_url ?? null,
-        pages: file.pages ?? null,
-      })
-    );
+    // Strip paragraph data to stay within the localStorage quota.
+    const pagesForCache = file.pages?.map(({ page_number, text }) => ({
+      page_number,
+      text,
+    })) ?? null;
+    try {
+      localStorage.setItem(
+        "currentDocument",
+        JSON.stringify({
+          id: file.id,
+          content: file.content,
+          title: file.title,
+          pdf_url: file.pdf_url ?? null,
+          thumbnail_url: file.thumbnail_url ?? null,
+          pages: pagesForCache,
+        })
+      );
+    } catch {
+      // Storage full — navigate anyway; document reader will fetch from API.
+    }
     router.push(`/documents/${file.id}?autoplay=true`);
   };
 

@@ -1,10 +1,11 @@
-import Header from "./Header";
-import HeroSection from "./HeroSection";
-import HowItWorksSection from "./HowItWorksSection";
-import FeaturesSection from "./FeaturesSection";
-import TestimonialsSection from "./TestimonialsSection";
-import PricingSection from "./PricingSection";
-import Footer from "./Footer";
+import Header from "./components/Header";
+import HeroSection from "./components/HeroSection";
+import HowItWorksSection from "./components/HowItWorksSection";
+import FeaturesSection from "./components/FeaturesSection";
+import TestimonialsSection from "./components/TestimonialsSection";
+import PricingSection from "./components/PricingSection";
+import CTASection from "./components/CTASection";
+import Footer from "./components/Footer";
 
 export default function Home() {
   return (
@@ -12,10 +13,11 @@ export default function Home() {
       <Header />
       <main>
         <HeroSection />
-        <FeaturesSection />
         <HowItWorksSection />
+        <FeaturesSection />
         <TestimonialsSection />
         <PricingSection />
+        <CTASection />
       </main>
       <Footer />
     </div>

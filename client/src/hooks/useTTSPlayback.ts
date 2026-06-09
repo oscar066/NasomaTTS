@@ -50,7 +50,6 @@ export interface PlaybackState {
   wordWindow: string[];
   windowStart: number;
   currentTTSPage: number;
-  /** TTS-specific errors (separate from document load errors). */
   error: string;
 }
 
@@ -119,7 +118,7 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
   const update = (patch: Partial<PlaybackState>) =>
     setState((prev) => ({ ...prev, ...patch }));
 
-  // ── Progress persistence ──────────────────────────────────────────────────
+  // Progress persistence 
 
   /**
    * Save the current page to both localStorage (instant) and the backend
@@ -275,7 +274,12 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
       return;
     }
 
-    const pageText = storedPages[idx].text;
+    // Use paragraph-structured text when available so the SSE paragraphIndex
+    // events align exactly with storedPages[idx].paragraphs.
+    const pageData = storedPages[idx];
+    const pageText = pageData.paragraphs?.length
+      ? pageData.paragraphs.map((p) => p.text).join("\n\n")
+      : pageData.text;
 
     // Write synchronously so handleStop always knows which page is active,
     // even before the React state update (setState) has re-rendered.

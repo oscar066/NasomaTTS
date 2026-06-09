@@ -52,6 +52,9 @@ export const authApi = {
 export interface StoredPage {
   page_number: number;
   text: string;
+  /** Paragraph blocks extracted by PyMuPDF. Present for documents uploaded
+   *  after paragraph-level TTS was introduced; undefined for legacy docs. */
+  paragraphs?: Array<{ text: string }>;
 }
 
 export interface Document {

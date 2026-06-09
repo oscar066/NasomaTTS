@@ -55,7 +55,7 @@ export interface ReaderState {
   currentTTSPage: number;
 }
 
-// ── Hook ─────────────────────────────────────────────────────────────────────
+// Hook
 
 export const useDocumentReader = () => {
   const searchParams = useSearchParams();
@@ -94,7 +94,7 @@ export const useDocumentReader = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voices.voices, doc.text]);
 
-  // ── Assemble the unified state object ────────────────────────────────────
+  // Assemble the unified state object
 
   const state: ReaderState = {
     // Document

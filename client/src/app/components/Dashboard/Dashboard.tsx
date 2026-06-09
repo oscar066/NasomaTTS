@@ -6,17 +6,16 @@ import { FileCard } from "./FileCard";
 import Sidebar from "./SideBar";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { documentsApi, type Document } from "@/lib/api";
+import { documentsApi } from "@/lib/api";
 import { Upload, FileText, AlertCircle, Loader2 } from "lucide-react";
 import { useDocumentUpload } from "@/hooks/useDocumentUpload";
+import { useDocumentsStore } from "@/store/documents";
 import { toast } from "sonner";
 
 function SkeletonCard() {
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col animate-pulse">
-      {/* Cover placeholder */}
       <div className="w-full bg-secondary" style={{ aspectRatio: "3/4", maxHeight: "240px" }} />
-      {/* Body placeholder */}
       <div className="p-3 flex flex-col gap-2">
         <div className="h-3.5 bg-secondary rounded w-3/4" />
         <div className="flex items-center gap-2">
@@ -64,11 +63,13 @@ function EmptyState({ onUpload, isUploading }: EmptyStateProps) {
 export default function Dashboard() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { uploadDocument, isLoading: isUploading } = useDocumentUpload();
+
+  const { documents, isLoaded, setDocuments, addDocument, updateDocument, removeDocument } =
+    useDocumentsStore();
 
   const { data: session, status } = useSession({
     required: true,
@@ -79,6 +80,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.email) return;
+    // Skip fetch if the store already has the list for this session.
+    if (isLoaded) return;
 
     const fetchDocs = async () => {
       try {
@@ -101,17 +104,12 @@ export default function Dashboard() {
     };
 
     fetchDocs();
-  }, [status, session, router]);
+  }, [status, session, router, isLoaded, setDocuments]);
 
-  const handleDelete = (deletedId: string) => {
-    setDocuments((prev) => prev.filter((d) => d.id !== deletedId));
-  };
+  const handleDelete = (deletedId: string) => removeDocument(deletedId);
 
-  const handleRename = (id: string, newTitle: string) => {
-    setDocuments((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, title: newTitle } : d))
-    );
-  };
+  const handleRename = (id: string, newTitle: string) =>
+    updateDocument(id, { title: newTitle });
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -128,7 +126,10 @@ export default function Dashboard() {
       toast.success("Document uploaded", {
         description: `${file.name} has been processed and saved.`,
       });
-      if (result?.id) router.push(`/documents/${result.id}`);
+      if (result?.id) {
+        addDocument(result);
+        router.push(`/documents/${result.id}`);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "An error occurred during upload.";
       toast.error("Upload failed", { description: msg });
@@ -138,6 +139,7 @@ export default function Dashboard() {
   };
 
   const firstName = session?.user?.name?.split(" ")[0] ?? "there";
+  const isInitialLoad = loading && !isLoaded;
 
   if (status === "loading") {
     return (
@@ -155,12 +157,11 @@ export default function Dashboard() {
         <TopBar onToggleSidebar={() => setSidebarOpen((p) => !p)} />
 
         <main className="flex-1 overflow-y-auto p-6">
-          {/* Page header */}
           <div className="mb-6">
             <h1 className="text-2xl font-bold">
-              {loading ? "Your Library" : `Hey, ${firstName} 👋`}
+              {isInitialLoad ? "Your Library" : `Hey, ${firstName} 👋`}
             </h1>
-            {!loading && !error && (
+            {!isInitialLoad && !error && (
               <p className="text-sm text-muted-foreground mt-0.5">
                 {documents.length === 0
                   ? "Your library is empty — upload a PDF to get started."
@@ -169,7 +170,6 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Error */}
           {error && (
             <div className="flex items-start gap-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg px-4 py-3 mb-6 text-sm">
               <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
@@ -177,8 +177,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Loading skeletons */}
-          {loading && (
+          {isInitialLoad && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
               {Array.from({ length: 6 }).map((_, i) => (
                 <SkeletonCard key={i} />
@@ -186,8 +185,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Empty state */}
-          {!loading && !error && documents.length === 0 && (
+          {!isInitialLoad && !error && documents.length === 0 && (
             <>
               <input
                 type="file"
@@ -203,13 +201,26 @@ export default function Dashboard() {
             </>
           )}
 
-          {/* Document grid */}
-          {!loading && documents.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-              {documents.map((doc) => (
-                <FileCard key={doc.id} file={doc} onDelete={handleDelete} onRename={handleRename} />
-              ))}
-            </div>
+          {!isInitialLoad && documents.length > 0 && (
+            <>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                accept="application/pdf"
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                {documents.map((doc) => (
+                  <FileCard
+                    key={doc.id}
+                    file={doc}
+                    onDelete={handleDelete}
+                    onRename={handleRename}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </main>
       </div>
