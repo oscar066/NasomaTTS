@@ -18,7 +18,7 @@
  * and text mode.
  */
 
-import React from "react";
+import React, { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2 } from "lucide-react";
@@ -42,6 +42,7 @@ const PDFViewer = dynamic(() => import("./components/PDFViewer"), {
 
 /** Height (px) of the floating TTS overlay card — used for scroll padding. */
 const OVERLAY_HEIGHT = 180;
+
 /** Height (px) of the sticky header — used to size the main scroll area. */
 const HEADER_HEIGHT  = 56;
 
@@ -57,7 +58,7 @@ const DocumentReader: React.FC = () => {
       paragraphs,
       currentParagraphIndex,
       currentWordIndex,
-      currentWord,
+      absoluteWordIdx,
       wordWindow,
       windowStart,
       voice,
@@ -68,7 +69,6 @@ const DocumentReader: React.FC = () => {
       error,
       currentTTSPage,
     },
-    highlightWordIdx,
     setVoice,
     setSpeed,
     handlePlay,
@@ -76,7 +76,21 @@ const DocumentReader: React.FC = () => {
     skipToParagraph,
   } = useDocumentReader();
 
-  // ── Loading screen ────────────────────────────────────────────────────────
+  // ── Paragraph word boundaries for the active PDF page ────────────────────
+  // Cumulative word counts per paragraph on the current TTS page.
+  // PDFViewer uses this to know which word spans belong to which paragraph.
+  // Must be above any early return so the hook call order is stable.
+  const paragraphWordBoundaries = useMemo(() => {
+    const page = storedPages[currentTTSPage >= 0 ? currentTTSPage : 0];
+    if (!page?.paragraphs?.length) return [];
+    let total = 0;
+    return page.paragraphs.map((p) => {
+      total += p.text.split(/\s+/).filter(Boolean).length;
+      return total;
+    });
+  }, [storedPages, currentTTSPage]);
+
+  // ── Loading screen
 
   if (loading) {
     return (
@@ -88,13 +102,13 @@ const DocumentReader: React.FC = () => {
     );
   }
 
-  // ── Derive mode-specific values ───────────────────────────────────────────
+  // ── Derive mode-specific values
 
   const isPdfMode              = !!pdfUrl;
   const overlayParagraphIndex  = isPdfMode ? currentTTSPage       : currentParagraphIndex;
   const overlayTotalParagraphs = isPdfMode ? storedPages.length   : paragraphs.length;
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -135,8 +149,9 @@ const DocumentReader: React.FC = () => {
               <PDFViewer
                 url={pdfUrl}
                 highlightPage={currentTTSPage}
-                highlightWordIdx={highlightWordIdx}
-                highlightWord={currentWord}
+                highlightParagraphIdx={currentParagraphIndex}
+                currentWordInParagraph={currentWordIndex}
+                paragraphWordBoundaries={paragraphWordBoundaries}
               />
             </div>
           </div>
@@ -146,9 +161,7 @@ const DocumentReader: React.FC = () => {
           /* Text mode — scrollable paragraph list */
           <TextReader
             paragraphs={paragraphs}
-            currentParagraphIndex={currentParagraphIndex}
-            currentWordIndex={currentWordIndex}
-            wordWindow={wordWindow}
+            absoluteWordIdx={absoluteWordIdx}
             overlayHeight={OVERLAY_HEIGHT}
             onSkipTo={skipToParagraph}
           />

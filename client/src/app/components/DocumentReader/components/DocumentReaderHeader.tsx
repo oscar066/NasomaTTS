@@ -34,7 +34,7 @@ const DocumentReaderHeader: React.FC<DocumentReaderHeaderProps> = ({
   totalPages,
   onBack,
 }) => (
-  <header className="sticky top-0 z-20 h-14 flex items-center bg-background border-b border-border px-4 gap-3">
+  <header className="sticky top-0 z-20 h-14 flex items-center bg-muted border-b border-border px-4 gap-3">
 
     {/* Back button */}
     <Button

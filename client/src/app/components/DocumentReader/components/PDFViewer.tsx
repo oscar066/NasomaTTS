@@ -1,111 +1,87 @@
 "use client";
 
 /**
- * PDFViewer — renders a PDF and highlights the currently spoken word directly
- * inside the pdf.js text layer, Speechify-style.
+ * PDFViewer — renders a PDF and highlights the currently spoken word plus a
+ * short "reading window" around it inside the pdf.js text layer.
  *
- * How it works
- * ────────────
- * react-pdf renders each page as two layers stacked on top of each other:
- *   1. A <canvas> with the visual raster of the page.
- *   2. A transparent `.react-pdf__Page__textContent` div containing real
- *      <span> elements for every text item — exactly positioned to match the
- *      canvas.  These spans are what make PDF text selectable.
+ * Why a reading window instead of paragraph highlighting
+ * ───────────────────────────────────────────────────────
+ * PyMuPDF (the server-side extractor) often groups an entire page — or many
+ * visual paragraphs — into a single paragraph block.  Painting the whole block
+ * floods the viewport with colour.  A reading window (a fixed band of N word
+ * spans centred on the current word) is visually clean and works regardless of
+ * how the document was segmented server-side.
  *
- * After each page's text layer is in the DOM (`onRenderSuccess` + retry loop),
- * we walk the DIRECT CHILD spans of the text layer and split any that contain
- * multiple words into individual word-level <span>s.  The result is stored in
- * `wordEntriesRef` as `{ span, text }[]` per page.
+ * Word entry indexing
+ * ───────────────────
+ * react-pdf renders a transparent `.react-pdf__Page__textContent` div whose
+ * child <span>s match the canvas.  We split multi-word spans into one child
+ * <span> per word and store the flat array in `wordEntriesRef`.
  *
- * Why direct children only + idempotency guard?
- * We mutate the original spans by replacing their text content with child
- * <span>s.  React strict-mode double-invokes effects, and container resizes
- * re-fire onRenderSuccess, both of which would re-run indexPageWords on the
- * same text layer.  A second run would call `span.textContent = ""` on the
- * already-split spans, destroying all word sub-spans and leaving only one
- * entry per original span — the "first word of each sentence" symptom.
- * Stamping `data-nasoma-indexed="1"` on the text layer element makes every
- * subsequent call a no-op while still allowing fresh indexing when the
- * element is recreated (URL change, page resize beyond react-pdf's threshold).
+ * The current word's entry index is derived from `currentWordInParagraph`
+ * (within-paragraph word index from the SSE stream, resets to 0 each paragraph)
+ * plus the paragraph's start offset in the entry array.  This avoids the
+ * cumulative drift that plagued the old `absoluteWordIdx` approach.
  *
- * Retry mechanism
- * A single `requestAnimationFrame` is occasionally not enough — react-pdf
- * populates the text layer asynchronously and the DOM may still be empty when
- * the rAF fires on slow renders.  We retry up to `INDEX_MAX_ATTEMPTS` times
- * with `INDEX_RETRY_MS` between attempts so no words are missed.
- *
- * Fuzzy word matching
- * The parent passes `highlightWord` (the exact string currently being spoken).
- * When the span at `highlightWordIdx` doesn't match that string we search
- * ±`FUZZY_RADIUS` positions for the closest textual match.  This corrects the
- * cumulative drift that occurs when PyMuPDF's word tokenisation differs from
- * pdf.js's.
- *
- * Highlight application
- * When `highlightWordIdx` (or `highlightWord`) changes we:
- *   1. Remove the `nasoma-highlight` class from the previously active span.
- *   2. Resolve the target span (direct index → fuzzy fallback).
- *   3. Add `nasoma-highlight` and scroll smoothly into view.
- *
- * This avoids all fractional coordinate maths and works correctly at any zoom
- * level because we are styling the actual DOM elements already laid out by the
- * browser.
+ * Race-condition fix
+ * ──────────────────
+ * `indexedCount` state is incremented each time a page finishes indexing.
+ * Both highlight effects depend on it so they re-run once entries are ready,
+ * even if the paragraph/word props haven't changed since the SSE event fired.
  */
 
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-// AnnotationLayer.css and TextLayer.css are imported in globals.css so they
-// are guaranteed to be present before this dynamically-loaded component mounts.
 import { Skeleton } from "@/components/ui/skeleton";
 
-pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
+pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-/** Maximum number of retries when waiting for the text layer DOM. */
 const INDEX_MAX_ATTEMPTS = 12;
+const INDEX_RETRY_MS     = 60;
 
-/** Milliseconds between indexing retry attempts. */
-const INDEX_RETRY_MS = 60;
+/** Word entries before the current word that receive the reading-window tint. */
+const WINDOW_BEFORE = 12;
+/** Word entries after the current word that receive the reading-window tint. */
+const WINDOW_AFTER  = 20;
 
-/** Search radius (in word positions) for fuzzy word matching. */
-const FUZZY_RADIUS = 25;
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-// ── Public types ─────────────────────────────────────────────────────────────
-
-/**
- * Minimal per-page metadata exposed to the parent.
- * Kept intentionally thin — the viewer owns word-span state internally.
- */
 export interface PageData {
-  /** Number of word spans indexed on this page by the viewer. */
   wordCount: number;
 }
 
 interface PDFViewerProps {
   url: string;
-  /** Called once all pages have had their text layers indexed. */
   onPagesReady?: (pages: PageData[]) => void;
-  /** 0-based page index that is currently being spoken. */
+  /** 0-based page index currently being spoken. */
   highlightPage?: number;
-  /** Word index within that page to highlight (maps to the entry array). */
-  highlightWordIdx?: number;
   /**
-   * The exact word string currently being spoken.
-   * Used for text-based drift correction when the span at `highlightWordIdx`
-   * doesn't match this string.
+   * 0-based paragraph index within the active page (from SSE newParagraph
+   * events).  Used together with `paragraphWordBoundaries` to locate the
+   * paragraph's start offset inside `wordEntriesRef`.
    */
-  highlightWord?: string;
+  highlightParagraphIdx?: number;
+  /**
+   * Word index within the current paragraph (from SSE word events).
+   * Resets to 0 at each paragraph boundary — no cross-paragraph drift.
+   */
+  currentWordInParagraph?: number;
+  /**
+   * Cumulative PyMuPDF word counts per paragraph on the active page.
+   * e.g. [5, 12, 20] → paragraph 0 has words 0-4, paragraph 1 has 5-11 …
+   * Absent for legacy documents — the whole page is treated as one paragraph.
+   */
+  paragraphWordBoundaries?: number[];
 }
 
-/** Internal word entry: a reference to the DOM span and its normalised text. */
 interface WordEntry {
   span: HTMLElement;
-  /** Lowercased, trimmed text of the word — used for fuzzy matching. */
   text: string;
 }
 
-// ── Document loading skeleton ────────────────────────────────────────────────
+// ── Skeleton ──────────────────────────────────────────────────────────────────
 
 const LINE_WIDTHS = [
   "100%", "96%", "91%", "100%", "88%", "45%",
@@ -143,38 +119,34 @@ const DocumentSkeleton: React.FC<{ width: number }> = ({ width }) => {
   );
 };
 
-// ── PDFViewer ────────────────────────────────────────────────────────────────
+// ── PDFViewer ─────────────────────────────────────────────────────────────────
 
 const PDFViewer: React.FC<PDFViewerProps> = ({
   url,
   onPagesReady,
   highlightPage,
-  highlightWordIdx,
-  highlightWord,
+  highlightParagraphIdx,
+  currentWordInParagraph,
+  paragraphWordBoundaries,
 }) => {
   const [numPages, setNumPages] = useState(0);
   const [containerWidth, setContainerWidth] = useState(800);
 
-  // Refs to each page wrapper <div> — used for scroll-into-view on page change.
-  const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // Incremented each time a page finishes indexing so highlight effects
+  // re-run even though wordEntriesRef itself is a ref (not state).
+  const [indexedCount, setIndexedCount] = useState(0);
 
-  /**
-   * Per-page flat arrays of `{ span, text }` entries built from the text layer.
-   * Stored in a ref (not state) so highlight updates never trigger a re-render.
-   */
+  const pageRefs       = useRef<(HTMLDivElement | null)[]>([]);
   const wordEntriesRef = useRef<WordEntry[][]>([]);
 
-  /**
-   * The span that currently carries the `.nasoma-highlight` class.
-   * Kept so we can remove it in O(1) without a DOM search.
-   */
-  const activeSpanRef = useRef<HTMLElement | null>(null);
+  // Track which spans currently carry each CSS class for O(1) removal.
+  const activeWindowSpansRef = useRef<HTMLElement[]>([]);
+  const activeWordSpanRef    = useRef<HTMLElement | null>(null);
 
-  // Track how many pages have been indexed so we can fire onPagesReady once.
   const indexedCountRef = useRef(0);
-  const numPagesRef = useRef(0);
+  const numPagesRef     = useRef(0);
 
-  // ── Container resize observer ──────────────────────────────────────────────
+  // ── Container resize observer ─────────────────────────────────────────────
 
   const containerRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
@@ -186,31 +158,20 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     return () => ro.disconnect();
   }, []);
 
-  // ── Reset when URL changes ─────────────────────────────────────────────────
+  // ── Reset on URL change ───────────────────────────────────────────────────
 
   useEffect(() => {
-    wordEntriesRef.current = [];
-    activeSpanRef.current = null;
-    indexedCountRef.current = 0;
-    numPagesRef.current = 0;
+    wordEntriesRef.current      = [];
+    activeWindowSpansRef.current = [];
+    activeWordSpanRef.current    = null;
+    indexedCountRef.current      = 0;
+    numPagesRef.current          = 0;
     setNumPages(0);
+    setIndexedCount(0);
   }, [url]);
 
-  // ── Text layer indexing ────────────────────────────────────────────────────
+  // ── Text layer indexing ───────────────────────────────────────────────────
 
-  /**
-   * Walk the direct child `<span>`s of the text layer for `pageIndex`, split
-   * any multi-word spans into individual word-level `<span>`s, and store the
-   * result in `wordEntriesRef` as `WordEntry[]`.
-   *
-   * If the text layer is not yet in the DOM (async render), the function
-   * schedules itself up to `INDEX_MAX_ATTEMPTS` times with `INDEX_RETRY_MS`
-   * between attempts.  Once complete it stamps `data-nasoma-indexed="1"` on
-   * the text layer element so any subsequent call is a no-op (idempotent).
-   *
-   * @param pageIndex - 0-based index of the page to index.
-   * @param attempt   - How many times we have already tried (default 0).
-   */
   const indexPageWords = useCallback(
     (pageIndex: number, attempt = 0) => {
       const pageEl = pageRefs.current[pageIndex];
@@ -220,37 +181,35 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         ".react-pdf__Page__textContent"
       ) as HTMLElement | null;
 
-      // Text layer not yet in the DOM — retry after a short delay.
       if (!textLayer) {
-        if (attempt < INDEX_MAX_ATTEMPTS) {
+        if (attempt < INDEX_MAX_ATTEMPTS)
           setTimeout(() => indexPageWords(pageIndex, attempt + 1), INDEX_RETRY_MS);
-        }
         return;
       }
 
-      // ── Idempotency guard ──────────────────────────────────────────────────
-      // React strict-mode double-invokes effects, and container resizes
-      // retrigger onRenderSuccess — both cause indexPageWords to fire a second
-      // time on the same text layer DOM element.  Without this guard the second
-      // call executes `span.textContent = ""` which destroys the word sub-spans
-      // written by the first pass, leaving one entry per original span and
-      // producing the "only first word of each sentence highlighted" symptom.
       if (textLayer.dataset.nasomaIndexed === "1") return;
 
-      // Snapshot direct child <span>s only — using `:scope > span` rather than
-      // `children` to exclude any <br> / <div> elements some pdf.js builds add,
-      // and to be explicit that we want only span elements.
-      const originalSpans = Array.from(
+      const rawSpans = Array.from(
         textLayer.querySelectorAll<HTMLElement>(":scope > span")
       );
 
-      // Text layer is present but still empty — retry until populated.
-      if (originalSpans.length === 0) {
-        if (attempt < INDEX_MAX_ATTEMPTS) {
+      if (rawSpans.length === 0) {
+        if (attempt < INDEX_MAX_ATTEMPTS)
           setTimeout(() => indexPageWords(pageIndex, attempt + 1), INDEX_RETRY_MS);
-        }
         return;
       }
+
+      // Sort into visual reading order (top → left) because pdf.js stores spans
+      // in PDF structure order which often differs from visual sequence.  Without
+      // this the reading-window window hits spans scattered around the page.
+      const layerRect = textLayer.getBoundingClientRect();
+      const originalSpans = [...rawSpans].sort((a, b) => {
+        const ar = a.getBoundingClientRect();
+        const br = b.getBoundingClientRect();
+        const dy = (ar.top - layerRect.top) - (br.top - layerRect.top);
+        if (Math.abs(dy) > 3) return dy;
+        return (ar.left - layerRect.left) - (br.left - layerRect.left);
+      });
 
       const entries: WordEntry[] = [];
 
@@ -258,18 +217,14 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         const rawText = span.textContent ?? "";
         if (!rawText.trim()) continue;
 
-        // Split into alternating [word, whitespace, word, …] tokens.
-        const tokens = rawText.split(/(\s+)/);
+        const tokens     = rawText.split(/(\s+)/);
         const wordTokens = tokens.filter((t) => t.trim());
 
         if (wordTokens.length <= 1) {
-          // Single-word span — reference it directly without DOM mutation.
           entries.push({ span, text: rawText.trim().toLowerCase() });
           continue;
         }
 
-        // Multi-word span — replace content with one child <span> per word
-        // and text nodes for whitespace so inline layout is preserved.
         span.textContent = "";
         for (const token of tokens) {
           if (/^\s+$/.test(token)) {
@@ -283,18 +238,15 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         }
       }
 
-      // Mark this element so any re-invocation is a no-op.
       textLayer.dataset.nasomaIndexed = "1";
       wordEntriesRef.current[pageIndex] = entries;
       indexedCountRef.current += 1;
 
-      // Visible in DevTools console — helps verify word counts match TTS stream.
       console.debug(
         `[PDFViewer] page ${pageIndex} indexed: ${entries.length} words` +
         ` from ${originalSpans.length} spans`
       );
 
-      // Notify the parent once every page has been indexed.
       if (indexedCountRef.current === numPagesRef.current && onPagesReady) {
         const pages: PageData[] = Array.from(
           { length: numPagesRef.current },
@@ -302,107 +254,141 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         );
         onPagesReady(pages);
       }
+
+      // Trigger highlight effects to re-run now that entries are ready.
+      setIndexedCount((c) => c + 1);
     },
     [onPagesReady]
   );
 
-  // ── Highlight update ───────────────────────────────────────────────────────
+  // ── Resolve paragraph start offset in pdf.js entries ─────────────────────
+  //
+  // Returns the entry index where the given paragraph begins, scaled from
+  // PyMuPDF word counts to pdf.js entry counts.
+
+  const resolveParagraphStart = (pIdx: number, totalEntries: number): number => {
+    const b = paragraphWordBoundaries;
+    if (!b || b.length === 0 || pIdx <= 0) return 0;
+
+    const totalPyMuPDF = b[b.length - 1] ?? 0;
+    if (totalPyMuPDF === 0) return 0;
+
+    const ratio    = totalEntries / totalPyMuPDF;
+    const rawStart = b[pIdx - 1] ?? 0;
+    return Math.min(Math.round(rawStart * ratio), totalEntries - 1);
+  };
+
+  // ── Combined highlight effect ─────────────────────────────────────────────
+  //
+  // Runs on every word advance (currentWordInParagraph) and also whenever a
+  // page finishes indexing (indexedCount) so it retries after the race window.
+  //
+  // Three-step update:
+  //   1. Remove old reading-window tint.
+  //   2. Remove old word highlight.
+  //   3. Compute current word entry index, apply window tint + word highlight,
+  //      scroll current word into view.
 
   useEffect(() => {
-    // Always remove the previous highlight first.
-    if (activeSpanRef.current) {
-      activeSpanRef.current.classList.remove("nasoma-highlight");
-      activeSpanRef.current = null;
+    // ── 1. Clear previous window tint ────────────────────────────────────
+    for (const sp of activeWindowSpansRef.current) {
+      sp.classList.remove("nasoma-window");
+    }
+    activeWindowSpansRef.current = [];
+
+    // ── 2. Clear previous word highlight ─────────────────────────────────
+    if (activeWordSpanRef.current) {
+      activeWordSpanRef.current.classList.remove("nasoma-word");
+      activeWordSpanRef.current = null;
     }
 
-    if (
-      highlightPage == null || highlightPage < 0 ||
-      highlightWordIdx == null || highlightWordIdx < 0
-    ) return;
+    const page = highlightPage ?? -1;
+    const pIdx = highlightParagraphIdx ?? -1;
+    const wIdx = currentWordInParagraph ?? -1;
 
-    const entries = wordEntriesRef.current[highlightPage];
+    if (page < 0 || pIdx < 0 || wIdx < 0) return;
+
+    const entries = wordEntriesRef.current[page];
     if (!entries || entries.length === 0) return;
 
-    // ── Step 1: try the direct index ──────────────────────────────────────
-    let targetIdx = Math.min(highlightWordIdx, entries.length - 1);
+    // ── 3a. Resolve current word entry index ─────────────────────────────
+    const paraStart = resolveParagraphStart(pIdx, entries.length);
 
-    // ── Step 2: fuzzy correction using the spoken word string ─────────────
-    // If the entry at the direct index doesn't match the word the TTS engine
-    // is currently reading, scan ±FUZZY_RADIUS positions for the best match.
-    // This compensates for word-count divergence between PyMuPDF (backend) and
-    // pdf.js (frontend) on complex PDFs (ligatures, hyphenated words, etc.).
-    if (highlightWord) {
-      const target = highlightWord.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const directText = entries[targetIdx]?.text.replace(/[^a-z0-9]/g, "") ?? "";
+    // Scale within-paragraph word index proportionally.
+    // We only know the paragraph's raw word count from the boundaries array.
+    const b = paragraphWordBoundaries;
+    const rawParaLen = (() => {
+      if (!b || b.length === 0) return entries.length;
+      const rawEnd   = b[pIdx]        ?? b[b.length - 1] ?? 0;
+      const rawStart = pIdx > 0 ? (b[pIdx - 1] ?? 0) : 0;
+      return rawEnd - rawStart;
+    })();
 
-      if (directText !== target && target.length > 0) {
-        const searchStart = Math.max(0, highlightWordIdx - FUZZY_RADIUS);
-        const searchEnd   = Math.min(entries.length - 1, highlightWordIdx + FUZZY_RADIUS);
+    const rawParaEndEntry = (() => {
+      if (!b || b.length === 0) return entries.length;
+      const totalPyMuPDF = b[b.length - 1] ?? 0;
+      if (totalPyMuPDF === 0) return entries.length;
+      const ratio  = entries.length / totalPyMuPDF;
+      const rawEnd = b[pIdx] ?? totalPyMuPDF;
+      return Math.min(Math.round(rawEnd * ratio), entries.length);
+    })();
 
-        let bestIdx   = targetIdx;
-        let bestScore = 0;
+    const paraEntryLen = Math.max(1, rawParaEndEntry - paraStart);
+    const wordRatio    = rawParaLen > 0 ? paraEntryLen / rawParaLen : 1;
+    const wordEntryIdx = Math.min(
+      paraStart + Math.round(wIdx * wordRatio),
+      entries.length - 1
+    );
 
-        for (let i = searchStart; i <= searchEnd; i++) {
-          const entryText = entries[i]?.text.replace(/[^a-z0-9]/g, "") ?? "";
+    // ── 3b. Apply reading-window tint ────────────────────────────────────
+    const winStart = Math.max(0,               wordEntryIdx - WINDOW_BEFORE);
+    const winEnd   = Math.min(entries.length,  wordEntryIdx + WINDOW_AFTER + 1);
+    const newWindowSpans: HTMLElement[] = [];
 
-          if (entryText === target) {
-            // Exact match — accept immediately and stop searching.
-            bestIdx = i;
-            bestScore = 1;
-            break;
-          }
-
-          // Partial overlap score: longer common prefix = higher score.
-          if (entryText.length > 0 && target.length > 0) {
-            const shorter = entryText.length < target.length ? entryText : target;
-            const longer  = entryText.length < target.length ? target : entryText;
-            if (longer.startsWith(shorter)) {
-              const score = shorter.length / longer.length;
-              if (score > bestScore) { bestScore = score; bestIdx = i; }
-            }
-          }
-        }
-
-        // Only apply the fuzzy result when confidence is high enough to avoid
-        // jumping to the wrong word on a false partial match.
-        if (bestScore >= 0.7) targetIdx = bestIdx;
+    for (let i = winStart; i < winEnd; i++) {
+      const sp = entries[i]?.span;
+      if (sp) {
+        sp.classList.add("nasoma-window");
+        newWindowSpans.push(sp);
       }
     }
+    activeWindowSpansRef.current = newWindowSpans;
 
-    const entry = entries[targetIdx];
-    if (!entry) return;
+    // ── 3c. Apply word highlight 
+    const wordEntry = entries[wordEntryIdx];
+    if (wordEntry) {
+      wordEntry.span.classList.add("nasoma-word");
+      activeWordSpanRef.current = wordEntry.span;
 
-    entry.span.classList.add("nasoma-highlight");
-    activeSpanRef.current = entry.span;
+      // Scroll the current word smoothly into the centre of the viewport.
+      wordEntry.span.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
 
-    // Scroll the highlighted word into the centre of the viewport.
-    entry.span.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [highlightPage, highlightWordIdx, highlightWord]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightPage, highlightParagraphIdx, currentWordInParagraph, paragraphWordBoundaries, indexedCount]);
 
-  // ── Scroll to page when TTS advances to a new page ────────────────────────
+  // ── Scroll to page on page change ────────────────────────────────────────
 
   useEffect(() => {
     if (highlightPage == null || highlightPage < 0) return;
-    // Only scroll to the page top when no word highlight is active yet
-    // (i.e. at the very beginning of a new page transition).
-    if (activeSpanRef.current) return;
+    if (activeWordSpanRef.current) return;
     pageRefs.current[highlightPage]?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [highlightPage]);
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div ref={containerRef} className="w-full">
-      {/*
-        Highlight style injected inline so it co-locates with the component.
-        A translucent indigo background + soft glow ring stays visible on both
-        light and dark backgrounds without hiding the underlying text.
-      */}
       <style>{`
-        .nasoma-highlight {
-          background-color: rgba(99, 102, 241, 0.28);
+        .nasoma-window {
+          background-color: rgba(99, 102, 241, 0.13);
+          border-radius: 2px;
+        }
+        .nasoma-word {
+          background-color: rgba(99, 102, 241, 0.82) !important;
+          color: #fff !important;
           border-radius: 3px;
-          box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.22);
+          box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35);
           transition: background-color 0.07s ease;
         }
       `}</style>
@@ -410,9 +396,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       <Document
         file={url}
         onLoadSuccess={(pdf) => {
-          numPagesRef.current = pdf.numPages;
+          numPagesRef.current     = pdf.numPages;
           indexedCountRef.current = 0;
-          wordEntriesRef.current = new Array(pdf.numPages);
+          wordEntriesRef.current  = new Array(pdf.numPages);
           setNumPages(pdf.numPages);
         }}
         loading={<DocumentSkeleton width={containerWidth || 800} />}
@@ -437,8 +423,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                   renderAnnotationLayer
                   className="shadow-lg"
                   onRenderSuccess={() => {
-                    // One rAF gives react-pdf time to insert the text layer DOM,
-                    // then `indexPageWords` retries internally if still empty.
                     requestAnimationFrame(() => indexPageWords(i));
                   }}
                 />

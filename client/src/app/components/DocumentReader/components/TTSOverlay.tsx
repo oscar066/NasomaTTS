@@ -70,7 +70,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
 
   return (
     <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4">
-      <div className="rounded-2xl border border-border bg-background/95 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.12)] overflow-hidden">
+      <div className="rounded-2xl border border-border bg-muted backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.12)] overflow-hidden">
 
         {/* ── Progress bar ────────────────────────────────────── */}
         <div className="h-0.5 bg-border">
@@ -82,7 +82,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
 
         {/* ── Word focus strip (collapsible) ──────────────────── */}
         {expanded && (
-          <div className="bg-muted/40 min-h-[60px] flex items-center justify-center px-6 py-3 border-b border-border/60 overflow-hidden">
+          <div className="bg-background/30 min-h-[60px] flex items-center justify-center px-6 py-3 border-b border-border/60 overflow-hidden">
             {wordWindow.length > 0 ? (
               <div className="flex items-center gap-2 flex-wrap justify-center">
                 {wordWindow.map((word, i) => {
@@ -122,7 +122,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
           <div className="flex items-center gap-1.5">
             <Mic className="h-3 w-3 text-muted-foreground flex-shrink-0" />
             <Select value={voice} onValueChange={onVoiceChange}>
-              <SelectTrigger className="h-7 w-32 text-xs bg-secondary/60 border-border focus:ring-0 focus:ring-offset-0">
+              <SelectTrigger className="h-7 w-32 text-xs bg-background/40 border-border focus:ring-0 focus:ring-offset-0">
                 <SelectValue placeholder="Voice" />
               </SelectTrigger>
               <SelectContent>
@@ -174,7 +174,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
           {/* Right — Speed + collapse */}
           <div className="flex items-center justify-end gap-1">
             {/* Speed control pill */}
-            <div className="flex items-center rounded-lg bg-secondary/60 border border-border overflow-hidden">
+            <div className="flex items-center rounded-lg bg-background/40 border border-border overflow-hidden">
               <button
                 onClick={() => canSlower && onSpeedChange(SPEEDS[speedIdx - 1])}
                 disabled={!canSlower}
