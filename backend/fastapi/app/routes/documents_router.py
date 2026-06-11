@@ -63,7 +63,7 @@ def _fmt_doc(doc: dict, author: dict) -> dict:
     }
 
 
-@router.get("/")
+@router.get("")
 async def list_documents(db=Depends(get_db)):
     """Return all documents in the database (public, no authentication required).
 
@@ -124,7 +124,7 @@ async def get_document(doc_id: str, db=Depends(get_db)):
     return _fmt_doc(doc, _fmt_author(author) if author else {"id": str(doc["author"])})
 
 
-@router.post("/")
+@router.post("")
 async def create_document(
     data: DocumentCreate,
     current_user=Depends(get_current_user),

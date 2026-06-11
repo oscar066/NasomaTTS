@@ -17,7 +17,7 @@ from ..services.tts import tts_service
 router = APIRouter(prefix="/voices", tags=["voices"])
 
 
-@router.get("/")
+@router.get("")
 async def list_voices():
     """Return available TTS voices and engine availability.
 
