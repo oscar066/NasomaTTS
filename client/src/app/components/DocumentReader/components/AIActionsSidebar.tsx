@@ -44,10 +44,10 @@ const AIActionsSidebar: React.FC<AIActionsSidebarProps> = ({ onOpenChange }) => 
               key={key}
               onClick={() => setPanel(key)}
               title={label}
-              className="flex items-center justify-center sm:justify-start gap-2.5 px-2 py-2 sm:px-3 rounded-xl border border-border text-sm font-medium shadow-sm transition-all duration-150 w-10 sm:w-32 bg-muted/50 text-foreground hover:border-primary/40 hover:bg-muted hover:text-primary"
+              className="flex items-center justify-center xl:justify-start gap-2.5 px-2 py-2 xl:px-3 rounded-xl border border-border text-sm font-medium shadow-sm transition-all duration-150 w-10 xl:w-32 bg-muted/50 text-foreground hover:border-primary/40 hover:bg-muted hover:text-primary"
             >
               <Icon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-              <span className="hidden sm:inline">{label}</span>
+              <span className="hidden xl:inline">{label}</span>
             </button>
           ))}
         </div>
