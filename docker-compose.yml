@@ -1,0 +1,95 @@
+services:
+  # Next.js Client — binds to 127.0.0.1:3001 so only host nginx can reach it
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: /api
+        API_URL: http://nasoma_api_prod:8000
+    container_name: nasoma_client_prod
+    environment:
+      - API_URL=http://nasoma_api_prod:8000
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - NEXTAUTH_URL_INTERNAL=http://nasoma_client_prod:3000
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - JWT_SECRET=${JWT_SECRET}
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      - api
+    networks:
+      - nasoma-network
+    restart: always
+
+  # FastAPI Backend — binds to 127.0.0.1:8001
+  api:
+    build:
+      context: ./backend/fastapi
+      dockerfile: Dockerfile
+    container_name: nasoma_api_prod
+    environment:
+      - MONGODB_URL=mongodb://nasoma-mongo:27017
+      - MINIO_ENDPOINT=nasoma-minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET}
+      - JWT_SECRET=${JWT_SECRET}
+      - MONGODB_DB=${MONGODB_DB}
+    ports:
+      - "127.0.0.1:8001:8000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - nasoma-network
+    restart: always
+
+  # MongoDB
+  mongo:
+    image: mongo:8
+    container_name: nasoma_mongo_prod
+    hostname: nasoma-mongo
+    volumes:
+      - nasoma_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval \"db.adminCommand('ping')\" --quiet || exit 1"]
+      interval: 15s
+      timeout: 30s
+      retries: 5
+      start_period: 40s
+    networks:
+      - nasoma-network
+    restart: always
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio
+    container_name: nasoma_minio_prod
+    hostname: nasoma-minio
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
+    volumes:
+      - nasoma_minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nasoma-network
+    restart: always
+
+networks:
+  nasoma-network:
+    driver: bridge
+
+volumes:
+  nasoma_mongo_data:
+    driver: local
+  nasoma_minio_data:
+    driver: local
