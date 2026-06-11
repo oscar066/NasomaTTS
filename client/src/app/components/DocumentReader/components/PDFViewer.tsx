@@ -136,6 +136,16 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   // re-run even though wordEntriesRef itself is a ref (not state).
   const [indexedCount, setIndexedCount] = useState(0);
 
+  // ── Lazy rendering ────────────────────────────────────────────────────────
+  // Rendering 100+ PDF canvases simultaneously blocks the main thread.
+  // We track which pages have been "activated" (entered the viewport or been
+  // targeted by TTS).  Once activated a page is never deactivated — so
+  // scrolling back is seamless.  The IntersectionObserver adds pages with a
+  // generous 600 px root margin so they load before the user reaches them.
+  const [renderedPages, setRenderedPages] = useState<Set<number>>(
+    () => new Set([0, 1, 2])
+  );
+
   const pageRefs       = useRef<(HTMLDivElement | null)[]>([]);
   const wordEntriesRef = useRef<WordEntry[][]>([]);
 
@@ -168,7 +178,77 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     numPagesRef.current          = 0;
     setNumPages(0);
     setIndexedCount(0);
+    setRenderedPages(new Set([0, 1, 2]));
   }, [url]);
+
+  // ── IntersectionObserver — activate pages as they approach the viewport ──
+  //
+  // Runs whenever numPages changes (i.e. once the PDF loads).  Observes every
+  // page-wrapper div; when one enters within 600 px of the viewport we mark
+  // it and its immediate neighbours as rendered so the real <Page> element
+  // replaces the skeleton before the user sees it.
+
+  useEffect(() => {
+    if (numPages === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const newIds: number[] = [];
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const idx = Number(
+            (entry.target as HTMLElement).dataset.nasomaPage
+          );
+          if (!isNaN(idx)) newIds.push(idx);
+        });
+        if (newIds.length === 0) return;
+
+        setRenderedPages((prev) => {
+          const next = new Set(prev);
+          newIds.forEach((idx) => {
+            // Activate the page plus one page on each side as a buffer.
+            for (
+              let i = Math.max(0, idx - 1);
+              i <= Math.min(numPages - 1, idx + 2);
+              i++
+            ) {
+              next.add(i);
+            }
+          });
+          return next;
+        });
+      },
+      { rootMargin: "600px 0px", threshold: 0 }
+    );
+
+    pageRefs.current.forEach((el) => {
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [numPages]);
+
+  // ── Pre-activate the TTS target page ─────────────────────────────────────
+  //
+  // When playback advances to a page the user hasn't scrolled to yet, we must
+  // ensure that page (and the next two) are rendered so highlighting works.
+
+  useEffect(() => {
+    const page = highlightPage;
+    if (page == null || page < 0) return;
+    setRenderedPages((prev) => {
+      if (prev.has(page) && prev.has(page + 1)) return prev; // already there
+      const next = new Set(prev);
+      for (
+        let i = Math.max(0, page - 1);
+        i <= Math.min(numPagesRef.current - 1, page + 2);
+        i++
+      ) {
+        next.add(i);
+      }
+      return next;
+    });
+  }, [highlightPage]);
 
   // ── Text layer indexing ───────────────────────────────────────────────────
 
@@ -189,8 +269,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
       if (textLayer.dataset.nasomaIndexed === "1") return;
 
+      // react-pdf v10 uses pdfjs-dist's native TextLayer renderer, which wraps
+      // text items inside <span class="markedContent"> containers for tagged PDFs.
+      // Querying ":scope > span" would return those wrappers, not the actual text
+      // items.  The real text items always have role="presentation" regardless of
+      // nesting depth, so we target them directly.
       const rawSpans = Array.from(
-        textLayer.querySelectorAll<HTMLElement>(":scope > span")
+        textLayer.querySelectorAll<HTMLElement>("span[role='presentation']")
       );
 
       if (rawSpans.length === 0) {
@@ -360,22 +445,33 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       wordEntry.span.classList.add("nasoma-word");
       activeWordSpanRef.current = wordEntry.span;
 
-      // Scroll the current word smoothly into the centre of the viewport.
-      wordEntry.span.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Keep the current word in view.  Use "nearest" so the container only
+      // scrolls when the word is actually outside the visible area — firing
+      // every ~400 ms with "center" would produce constant jittery animations.
+      wordEntry.span.scrollIntoView({ behavior: "instant", block: "nearest" });
     }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightPage, highlightParagraphIdx, currentWordInParagraph, paragraphWordBoundaries, indexedCount]);
 
-  // ── Scroll to page on page change ────────────────────────────────────────
+  // Clear stale highlights on page change
+  //
+  // Scrolling to the new page is handled by DocumentReader (which owns the
 
   useEffect(() => {
     if (highlightPage == null || highlightPage < 0) return;
-    if (activeWordSpanRef.current) return;
-    pageRefs.current[highlightPage]?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    for (const sp of activeWindowSpansRef.current) {
+      sp.classList.remove("nasoma-window");
+    }
+    activeWindowSpansRef.current = [];
+    if (activeWordSpanRef.current) {
+      activeWordSpanRef.current.classList.remove("nasoma-word");
+      activeWordSpanRef.current = null;
+    }
   }, [highlightPage]);
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <div ref={containerRef} className="w-full">
@@ -410,24 +506,34 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       >
         <div className="flex flex-col items-center gap-6">
           {numPages > 0 &&
-            Array.from({ length: numPages }, (_, i) => (
-              <div
-                key={i + 1}
-                ref={(el) => { pageRefs.current[i] = el; }}
-              >
-                <Page
-                  pageNumber={i + 1}
-                  width={containerWidth || 800}
-                  renderMode="canvas"
-                  renderTextLayer
-                  renderAnnotationLayer
-                  className="shadow-lg"
-                  onRenderSuccess={() => {
-                    requestAnimationFrame(() => indexPageWords(i));
-                  }}
-                />
-              </div>
-            ))}
+            Array.from({ length: numPages }, (_, i) => {
+              const isActivated = renderedPages.has(i);
+              return (
+                <div
+                  key={i + 1}
+                  ref={(el) => { pageRefs.current[i] = el; }}
+                  data-nasoma-page={i}
+                >
+                  {isActivated ? (
+                    <Page
+                      pageNumber={i + 1}
+                      width={containerWidth || 800}
+                      renderMode="canvas"
+                      renderTextLayer
+                      renderAnnotationLayer
+                      className="shadow-lg"
+                      onRenderSuccess={() => {
+                        requestAnimationFrame(() => indexPageWords(i));
+                      }}
+                    />
+                  ) : (
+                    /* Placeholder with correct dimensions so the scrollbar
+                       accurately represents the full document length. */
+                    <DocumentSkeleton width={containerWidth || 800} />
+                  )}
+                </div>
+              );
+            })}
         </div>
       </Document>
     </div>
