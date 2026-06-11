@@ -80,7 +80,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
     >
       <div className="rounded-2xl border border-border bg-muted backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.12)] overflow-hidden">
 
-        {/* ── Progress bar */}
+        {/* Progress bar */}
         <div className="h-0.5 bg-border">
           <div
             className="h-full bg-gradient-to-r from-primary to-purple-600 transition-all duration-300"
@@ -88,7 +88,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
           />
         </div>
 
-        {/* ── Word focus strip (collapsible) */}
+        {/* Word focus strip */}
         {expanded && (
           <div className="bg-background/30 min-h-[60px] flex items-center justify-center px-6 py-3 border-b border-border/60 overflow-hidden">
             {wordWindow.length > 0 ? (
@@ -123,7 +123,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
           </div>
         )}
 
-        {/* ── Controls bar  */}
+        {/* Controls */}
         <div className="h-14 px-3 grid grid-cols-3 items-center">
 
           {/* Left — Voice selector */}
@@ -156,10 +156,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
               <SkipBack className="h-4 w-4" />
             </Button>
 
-            {/* Play/Pause with optional loading ring */}
-            {/* Spinner shows only while voices are still being fetched — i.e.
-                the document opened but the backend hasn't responded yet.
-                It is never shown during active playback. */}
+            {/* Spinner visible only while voices are loading, never during playback */}
             <div className="relative flex items-center justify-center">
               {(!isPlaying && voices.length === 0) && (
                 <span

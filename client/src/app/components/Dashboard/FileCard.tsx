@@ -26,8 +26,6 @@ import {
 import { toast } from "sonner";
 import { documentsApi, thumbnailProxyUrl, type Document } from "@/lib/api";
 
-// ── Circular SVG progress ring ────────────────────────────────────────────────
-
 function ProgressRing({ percent }: { percent: number }) {
   const r = 16;
   const circ = 2 * Math.PI * r;
@@ -59,25 +57,21 @@ function ProgressRing({ percent }: { percent: number }) {
   );
 }
 
-// ── Props ─────────────────────────────────────────────────────────────────────
-
 interface FileCardProps {
   file: Document;
   onDelete?: (id: string) => void;
   onRename?: (id: string, newTitle: string) => void;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
-
 export function FileCard({ file, onDelete, onRename }: FileCardProps) {
   const router = useRouter();
   const { data: session } = useSession();
 
-  const [deleteLoading, setDeleteLoading]   = useState(false);
-  const [thumbError, setThumbError]         = useState(false);
-  const [isRenaming, setIsRenaming]         = useState(false);
-  const [renameValue, setRenameValue]       = useState(file.title);
-  const [renameLoading, setRenameLoading]   = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [thumbError, setThumbError]       = useState(false);
+  const [isRenaming, setIsRenaming]       = useState(false);
+  const [renameValue, setRenameValue]     = useState(file.title);
+  const [renameLoading, setRenameLoading] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const hasThumbnail = !!file.thumbnail_url && !thumbError;
@@ -86,13 +80,11 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
     ? Math.min(100, Math.round(((file.current_page ?? 0) / totalPages) * 100))
     : 0;
 
-  // ── Rename ──────────────────────────────────────────────────────────────────
-
   const startRename = (e: React.MouseEvent) => {
     e.stopPropagation();
     setRenameValue(file.title);
     setIsRenaming(true);
-    // Focus after paint so the input is in the DOM
+    // Defer focus so the input is in the DOM before we select it
     setTimeout(() => renameInputRef.current?.select(), 0);
   };
 
@@ -121,8 +113,6 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
     if (e.key === "Escape") { e.preventDefault(); cancelRename(); }
   };
 
-  // ── Delete
-
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -141,16 +131,10 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
     }
   };
 
-  // ── Navigation
-
   const handlePlayClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Strip paragraph data to stay within the localStorage quota.
-    const pagesForCache = file.pages?.map(({ page_number, text }) => ({
-      page_number,
-      text,
-    })) ?? null;
+    const pagesForCache = file.pages?.map(({ page_number, text }) => ({ page_number, text })) ?? null;
     try {
       localStorage.setItem(
         "currentDocument",
@@ -164,7 +148,7 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
         })
       );
     } catch {
-      // Storage full — navigate anyway; document reader will fetch from API.
+      // Storage full — reader will fetch from the API instead
     }
     router.push(`/documents/${file.id}?autoplay=true`);
   };
@@ -176,14 +160,11 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
       year: "numeric", month: "short", day: "numeric",
     });
 
-  // ── Render ────────────────────────────────────────────────────────────────────
-
   return (
     <div
       onClick={handleCardClick}
       className="group bg-card border border-border rounded-xl overflow-hidden hover:border-primary/40 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col"
     >
-      {/* ── Thumbnail / cover area ── */}
       <div className="relative w-full bg-muted/30 overflow-hidden" style={{ aspectRatio: "3/4", maxHeight: "240px" }}>
         {hasThumbnail ? (
           <img
@@ -205,7 +186,6 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
           </div>
         )}
 
-        {/* Dropdown — top-right of the cover */}
         <div className="absolute top-2 right-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -244,10 +224,7 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
         </div>
       </div>
 
-      {/* ── Card body ── */}
       <div className="flex flex-col gap-2 p-3">
-
-        {/* Title — plain text or inline rename input */}
         {isRenaming ? (
           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <Input
@@ -255,27 +232,14 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
               onKeyDown={handleRenameKey}
-              onBlur={commitRename}
               disabled={renameLoading}
               className="h-7 text-sm px-2 py-0 flex-1 min-w-0"
               maxLength={200}
             />
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 text-green-600 hover:text-green-700 flex-shrink-0"
-              onClick={commitRename}
-              disabled={renameLoading}
-            >
+            <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600 hover:text-green-700 flex-shrink-0" onClick={commitRename} disabled={renameLoading}>
               <Check className="h-3.5 w-3.5" />
             </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 text-muted-foreground flex-shrink-0"
-              onClick={cancelRename}
-              disabled={renameLoading}
-            >
+            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground flex-shrink-0" onClick={cancelRename} disabled={renameLoading}>
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -285,7 +249,6 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
           </span>
         )}
 
-        {/* Progress ring · date · play */}
         <div className="flex items-center gap-2">
           <ProgressRing percent={progress} />
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground flex-1 min-w-0">
@@ -301,7 +264,6 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
             Read
           </Button>
         </div>
-
       </div>
     </div>
   );
