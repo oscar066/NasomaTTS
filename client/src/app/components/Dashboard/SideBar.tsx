@@ -55,8 +55,9 @@ export default function Sidebar({ isOpen }: SidebarProps) {
 
     try {
       const result = await uploadDocument(file);
+      const shortName = file.name.length > 40 ? `${file.name.slice(0, 37)}…` : file.name;
       toast.success("Document uploaded", {
-        description: `${file.name} has been processed and saved.`,
+        description: `"${shortName}" has been processed and saved.`,
       });
       if (result?.id) router.push(`/documents/${result.id}`);
     } catch (err: unknown) {
