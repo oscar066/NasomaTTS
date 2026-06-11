@@ -171,12 +171,10 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
         const reader = res.body.getReader();
         const dec    = new TextDecoder();
         let buf      = "";
+        let doneSignalled = false;
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buf += dec.decode(value, { stream: true });
+        const processChunk = (chunk: string) => {
+          buf += chunk;
           const parts = buf.split("\n\n");
           buf = parts.pop() ?? "";
 
@@ -186,8 +184,9 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
             try {
               const data = JSON.parse(line.slice(6));
               if (data.done) {
+                doneSignalled = true;
                 (onDone ?? handleStop)();
-                return;
+                return true; // signal caller to stop
               }
               if (data.newParagraph) {
                 update({
@@ -209,6 +208,31 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
               }
             } catch { /* malformed SSE frame — skip */ }
           }
+          return false;
+        };
+
+        while (true) {
+          const { done, value } = await reader.read();
+
+          // Process any bytes that arrived alongside the close signal —
+          // the Fetch streaming API sometimes delivers the final chunk
+          // in the same read() call that sets done:true.
+          if (value?.length) {
+            const finished = processChunk(dec.decode(value, { stream: !done }));
+            if (finished) return;
+          }
+
+          if (done) break;
+        }
+
+        // Flush any remaining buffered bytes (e.g. a partial SSE frame that
+        // arrived just before the connection closed).
+        if (buf.trim()) processChunk("");
+
+        // The stream closed without an explicit data.done event — treat it as
+        // done so playback advances to the next page instead of stopping cold.
+        if (!doneSignalled) {
+          (onDone ?? handleStop)();
         }
       } catch (e: unknown) {
         if ((e as { name?: string })?.name !== "AbortError") {
