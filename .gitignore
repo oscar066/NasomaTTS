@@ -1,5 +1,22 @@
 .claude/
+
+# macOS metadata
+.DS_Store
+**/.DS_Store
+
+# Ignore .env files
 .env
 .env.local
 **/.env
 **/.env.local
+
+# Ignore server.zip
+backend/server.zip
+
+# Ignore GraphQL.zip
+graphql-upload.zip
+
+# Ignore build scripts 
+backend/.DS_Store
+backend/server/.DS_Store
+backend/docker-compose.services.yml
