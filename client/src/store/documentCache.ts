@@ -1,6 +1,12 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
 import { StoredPage } from "@/lib/api";
+
+// Clean up the old persisted cache key that was written by a previous version
+// of this store that used Zustand's persist middleware.  Without this the
+// browser's localStorage may still hold the stale key and trigger quota errors.
+if (typeof window !== "undefined") {
+  try { localStorage.removeItem("nasoma-document-cache"); } catch { /* ignore */ }
+}
 
 export interface CachedDocument {
   id: string;
@@ -23,45 +29,37 @@ interface DocumentCacheStore {
 }
 
 export const useDocumentCacheStore = create<DocumentCacheStore>()(
-  persist(
-    (set, get) => ({
-      cache: {},
+  (set, get) => ({
+    cache: {},
 
-      get: (id) => get().cache[id],
+    get: (id) => get().cache[id],
 
-      set: (doc) =>
-        set((s) => {
-          const updated = {
-            ...s.cache,
-            [doc.id]: { ...doc, cachedAt: Date.now() },
-          };
+    set: (doc) =>
+      set((s) => {
+        const updated = {
+          ...s.cache,
+          [doc.id]: { ...doc, cachedAt: Date.now() },
+        };
 
-          // Evict oldest entries when the cache exceeds the limit.
-          const entries = Object.values(updated);
-          if (entries.length > MAX_CACHED) {
-            entries.sort((a, b) => a.cachedAt - b.cachedAt);
-            entries.slice(0, entries.length - MAX_CACHED).forEach((e) => {
-              delete updated[e.id];
-            });
-          }
+        // Evict oldest entries when the cache exceeds the limit.
+        const entries = Object.values(updated);
+        if (entries.length > MAX_CACHED) {
+          entries.sort((a, b) => a.cachedAt - b.cachedAt);
+          entries.slice(0, entries.length - MAX_CACHED).forEach((e) => {
+            delete updated[e.id];
+          });
+        }
 
-          return { cache: updated };
-        }),
+        return { cache: updated };
+      }),
 
-      invalidate: (id) =>
-        set((s) => {
-          const next = { ...s.cache };
-          delete next[id];
-          return { cache: next };
-        }),
-    }),
-    {
-      name: "nasoma-document-cache",
-      storage: createJSONStorage(() => localStorage),
-      // Only persist the cache entries themselves — actions are not serialisable.
-      partialize: (s) => ({ cache: s.cache }),
-    }
-  )
+    invalidate: (id) =>
+      set((s) => {
+        const next = { ...s.cache };
+        delete next[id];
+        return { cache: next };
+      }),
+  })
 );
 
 // Helper: convert a full API Document's pages array to the stripped cache format.

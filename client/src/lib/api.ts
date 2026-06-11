@@ -1,7 +1,13 @@
 // Typed REST client for the FastAPI backend.
 // All functions throw on non-2xx responses so callers can catch normally.
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Server-side uses API_URL (internal Docker network name).
+// Browser uses NEXT_PUBLIC_API_URL (/api), which nginx rewrites in production
+// and Next.js rewrites proxy locally.
+const BASE =
+  typeof window === "undefined"
+    ? process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 async function request<T>(
   path: string,
@@ -73,7 +79,7 @@ export interface Document {
 
 export const documentsApi = {
   list: (token: string) =>
-    request<Document[]>("/documents/", {}, token),
+    request<Document[]>("/documents", {}, token),
 
   mine: (token: string) =>
     request<Document[]>("/documents/me", {}, token),
@@ -85,7 +91,7 @@ export const documentsApi = {
     request<Document>(`/documents/${id}`, {}, token),
 
   create: (body: { title: string; content: string; pdf_url?: string | null; thumbnail_url?: string | null; pages?: StoredPage[] | null }, token: string) =>
-    request<Document>("/documents/", {
+    request<Document>("/documents", {
       method: "POST",
       body: JSON.stringify(body),
     }, token),
@@ -136,7 +142,7 @@ export interface Voice {
 
 export const voicesApi = {
   list: () =>
-    request<{ voices: Voice[]; tts_available: boolean }>("/voices/"),
+    request<{ voices: Voice[]; tts_available: boolean }>("/voices"),
 };
 
 // ── PDF proxy 
