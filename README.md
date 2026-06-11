@@ -9,15 +9,15 @@ Nasoma is an affordable,a text-to-speech application designed specifically for s
 ### Application Screenshots
 
 #### Login Interface
-![Login Screen](login.png)
+![Login Screen](images/login.png)
 *Secure authentication with email/password or social login options*
 
 #### User Dashboard
-![Dashboard](dashboard.png)
+![Dashboard](images/dashboard.png)
 *Document management interface with recently accessed files and upload options*
 
 #### Document Reader
-![Document Reader](documentReading.png)
+![Document Reader](images/documentReading.png)
 *Interactive reading interface with synchronized text highlighting and playback controls*
 
 ## ✨ Features
