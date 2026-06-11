@@ -18,7 +18,7 @@
  * and text mode.
  */
 
-import React, { useMemo } from "react";
+import React, { useMemo, useRef, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2 } from "lucide-react";
@@ -48,6 +48,7 @@ const HEADER_HEIGHT  = 56;
 
 const DocumentReader: React.FC = () => {
   const router = useRouter();
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
 
   const {
     state: {
@@ -75,6 +76,21 @@ const DocumentReader: React.FC = () => {
     handleStop,
     skipToParagraph,
   } = useDocumentReader();
+
+  // ── Scroll the PDF container to the active page when TTS advances ────────
+  const pdfScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pdfScrollRef.current || currentTTSPage < 0) return;
+    const container = pdfScrollRef.current;
+    const pageEl = container.querySelector<HTMLElement>(
+      `[data-nasoma-page="${currentTTSPage}"]`
+    );
+    if (!pageEl) return;
+    // scrollIntoView targets the nearest scrollable ancestor (this container).
+    // smooth + start scrolls the page's top edge to the container's top edge.
+    pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [currentTTSPage]);
 
   // ── Paragraph word boundaries for the active PDF page ────────────────────
   // Cumulative word counts per paragraph on the current TTS page.
@@ -135,13 +151,16 @@ const DocumentReader: React.FC = () => {
 
       {/* ── Main content area ── */}
       <main
-        className="flex-1 overflow-hidden"
-        style={{ height: `calc(100vh - ${HEADER_HEIGHT}px)` }}
+        className="flex-1 overflow-hidden transition-[margin] duration-300 ease-in-out"
+        style={{
+          height: `calc(100vh - ${HEADER_HEIGHT}px)`,
+          marginLeft: aiPanelOpen ? "min(448px, 100vw)" : 0,
+        }}
       >
         {pdfUrl ? (
 
           /* PDF mode — all pages rendered with word-level highlight overlay */
-          <div className="overflow-y-auto bg-muted/20 h-full">
+          <div ref={pdfScrollRef} className="overflow-y-auto bg-muted/20 h-full">
             <div
               className="max-w-4xl mx-auto px-6 py-6"
               style={{ paddingBottom: `${OVERLAY_HEIGHT}px` }}
@@ -178,11 +197,12 @@ const DocumentReader: React.FC = () => {
       </main>
 
       {/* ── AI feature sidebar ── */}
-      <AIActionsSidebar />
+      <AIActionsSidebar onOpenChange={setAiPanelOpen} />
 
       {/* ── Floating TTS controls card ── */}
       <TTSOverlay
         isPlaying={isPlaying}
+        aiPanelOpen={aiPanelOpen}
         currentParagraphIndex={overlayParagraphIndex}
         totalParagraphs={overlayTotalParagraphs}
         currentWordIndex={currentWordIndex}

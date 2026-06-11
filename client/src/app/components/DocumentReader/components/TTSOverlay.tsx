@@ -30,6 +30,7 @@ interface TTSOverlayProps {
   voice: string;
   voices: Voice[];
   speed: number;
+  aiPanelOpen?: boolean;
   onPlay: () => void;
   onStop: () => void;
   onPrevParagraph: () => void;
@@ -50,6 +51,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
   voice,
   voices,
   speed,
+  aiPanelOpen = false,
   onPlay,
   onStop,
   onPrevParagraph,
@@ -69,10 +71,16 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
       : 0;
 
   return (
-    <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4">
+    <div
+      className="-translate-x-1/2 fixed bottom-5 z-[60] w-full max-w-2xl px-4"
+      style={{
+        left: aiPanelOpen ? "calc(50% + min(224px, 50vw))" : "50%",
+        transition: "left 300ms ease-in-out",
+      }}
+    >
       <div className="rounded-2xl border border-border bg-muted backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.12)] overflow-hidden">
 
-        {/* ── Progress bar ────────────────────────────────────── */}
+        {/* ── Progress bar */}
         <div className="h-0.5 bg-border">
           <div
             className="h-full bg-gradient-to-r from-primary to-purple-600 transition-all duration-300"
@@ -80,7 +88,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
           />
         </div>
 
-        {/* ── Word focus strip (collapsible) ──────────────────── */}
+        {/* ── Word focus strip (collapsible) */}
         {expanded && (
           <div className="bg-background/30 min-h-[60px] flex items-center justify-center px-6 py-3 border-b border-border/60 overflow-hidden">
             {wordWindow.length > 0 ? (
@@ -115,7 +123,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
           </div>
         )}
 
-        {/* ── Controls bar ────────────────────────────────────── */}
+        {/* ── Controls bar  */}
         <div className="h-14 px-3 grid grid-cols-3 items-center">
 
           {/* Left — Voice selector */}
@@ -148,16 +156,28 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
               <SkipBack className="h-4 w-4" />
             </Button>
 
-            <button
-              onClick={isPlaying ? onStop : onPlay}
-              className="h-9 w-9 rounded-full bg-gradient-to-br from-primary to-purple-600 hover:opacity-90 text-white flex items-center justify-center shadow-md shadow-primary/20 transition-all hover:scale-105 active:scale-95"
-              title={isPlaying ? "Pause (Space)" : "Play (Space)"}
-            >
-              {isPlaying
-                ? <Pause className="h-3.5 w-3.5" />
-                : <Play  className="h-3.5 w-3.5 ml-0.5" />
-              }
-            </button>
+            {/* Play/Pause with optional loading ring */}
+            {/* Spinner shows only while voices are still being fetched — i.e.
+                the document opened but the backend hasn't responded yet.
+                It is never shown during active playback. */}
+            <div className="relative flex items-center justify-center">
+              {(!isPlaying && voices.length === 0) && (
+                <span
+                  className="absolute rounded-full border-2 border-primary/60 border-t-transparent animate-spin pointer-events-none"
+                  style={{ inset: "-5px" }}
+                />
+              )}
+              <button
+                onClick={isPlaying ? onStop : onPlay}
+                className="h-9 w-9 rounded-full bg-gradient-to-br from-primary to-purple-600 hover:opacity-90 text-white flex items-center justify-center shadow-md shadow-primary/20 transition-all hover:scale-105 active:scale-95"
+                title={isPlaying ? "Pause (Space)" : "Play (Space)"}
+              >
+                {isPlaying
+                  ? <Pause className="h-3.5 w-3.5" />
+                  : <Play  className="h-3.5 w-3.5 ml-0.5" />
+                }
+              </button>
+            </div>
 
             <Button
               variant="ghost"
