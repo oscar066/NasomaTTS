@@ -1,0 +1,21 @@
+{
+  "name": "Me Nasoma",
+  "short_name": "Me Nasoma",
+  "description": "Turn any document into natural, lifelike audio.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "/Me-nasoma-tts.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/Me-nasoma-tts.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
