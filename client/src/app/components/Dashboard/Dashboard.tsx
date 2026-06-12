@@ -41,7 +41,7 @@ function EmptyState({ onUpload, isUploading }: EmptyStateProps) {
       </div>
       <h3 className="text-lg font-semibold mb-2">No documents yet</h3>
       <p className="text-sm text-muted-foreground max-w-xs mb-6">
-        Upload a PDF to get started. Nasoma will turn it into natural audio you
+        Upload a PDF to get started. Me Nasoma will turn it into natural audio you
         can listen to anywhere.
       </p>
       <button
