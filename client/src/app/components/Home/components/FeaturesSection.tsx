@@ -15,7 +15,7 @@ const features = [
     icon: FileText,
     title: "PDF & Document Support",
     description:
-      "Upload PDFs, articles, and text files. Nasoma extracts and reads them cleanly, handling formatting intelligently.",
+      "Upload PDFs, articles, and text files. Me Nasoma extracts and reads them cleanly, handling formatting intelligently.",
     iconBg: "bg-gradient-to-br from-blue-500 to-indigo-600",
     borderHover: "hover:border-blue-200 dark:hover:border-blue-900",
     shadowHover: "hover:shadow-blue-100 dark:hover:shadow-blue-950",
@@ -81,9 +81,9 @@ export default function FeaturesSection() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((feature, index) => (
-            <FadeIn key={index} delay={index * 80}>
+            <FadeIn key={index} delay={index * 80} className="h-full">
             <div
-              className={`group p-7 rounded-2xl bg-card border border-border
+              className={`group h-full flex flex-col p-7 rounded-2xl bg-card border border-border
                          ${feature.borderHover} hover:shadow-xl ${feature.shadowHover}
                          transition-all duration-300 hover:-translate-y-1`}
             >
@@ -97,7 +97,7 @@ export default function FeaturesSection() {
                 {feature.title}
               </h3>
 
-              <p className="text-sm text-muted-foreground leading-relaxed">
+              <p className="text-sm text-muted-foreground leading-relaxed flex-1">
                 {feature.description}
               </p>
             </div>
