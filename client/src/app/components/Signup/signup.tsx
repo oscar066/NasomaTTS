@@ -144,7 +144,9 @@ export default function SignupPage() {
           </div>
 
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-foreground mb-1">Create your account</h1>
+            <h1 className="text-2xl font-extrabold mb-1 bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-700 bg-clip-text text-transparent">
+              Create your account
+            </h1>
             <p className="text-sm text-muted-foreground">Free forever — no credit card needed</p>
           </div>
 

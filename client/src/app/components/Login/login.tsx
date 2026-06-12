@@ -93,7 +93,7 @@ export default function LoginPage() {
         {/* Bottom quote */}
         <div className="relative z-10 border-t border-white/20 pt-6">
           <p className="text-sm text-white/70 italic">
-            &ldquo;Nasoma changed how I consume research papers — I listen while I commute.&rdquo;
+            &ldquo;Me Nasoma changed how I consume research papers — I listen while I commute.&rdquo;
           </p>
           <p className="text-xs text-white/50 mt-1">— Sarah J., Content Creator</p>
         </div>
@@ -110,8 +110,10 @@ export default function LoginPage() {
           </div>
 
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-foreground mb-1">Welcome back</h1>
-            <p className="text-sm text-muted-foreground">Sign in to your Nasoma account</p>
+            <h1 className="text-2xl font-extrabold mb-1 bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-700 bg-clip-text text-transparent">
+              Welcome back
+            </h1>
+            <p className="text-sm text-muted-foreground">Sign in to your Me Nasoma account</p>
           </div>
 
           {/* Error alert */}
