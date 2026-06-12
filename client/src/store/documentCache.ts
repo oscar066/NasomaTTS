@@ -13,8 +13,8 @@ export interface CachedDocument {
   title: string;
   content: string;
   pdf_url: string | null;
-  /** Paragraph data stripped before caching — can be large for long PDFs. */
-  pages: Array<{ page_number: number; text: string }> | null;
+  /** Full page data including paragraphs — kept so word highlighting works on cache hits. */
+  pages: StoredPage[] | null;
   current_page: number;
   cachedAt: number;
 }
@@ -62,10 +62,11 @@ export const useDocumentCacheStore = create<DocumentCacheStore>()(
   })
 );
 
-// Helper: convert a full API Document's pages array to the stripped cache format.
+// Helper: pass pages through to the cache unchanged.
+// Previously this stripped paragraph data to save space, but that broke
+// word-level TTS highlighting on cache hits.  Paragraphs are kept now.
 export function stripPagesForCache(
   pages: StoredPage[] | null | undefined
-): Array<{ page_number: number; text: string }> | null {
-  if (!pages) return null;
-  return pages.map(({ page_number, text }) => ({ page_number, text }));
+): StoredPage[] | null {
+  return pages ?? null;
 }
