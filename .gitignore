@@ -31,3 +31,6 @@ backend/fastapi/pytest.ini
 # Ignore doc
 docs/
 /docs/
+
+# Ignore 
+.server-certificates/
