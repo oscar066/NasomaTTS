@@ -30,9 +30,9 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 
-from ..config import settings
+from ..utils.config import settings
 from ..db.database import get_db
-from ..deps import get_current_user
+from ..utils.deps import get_current_user
 from ..services.storage import get_pdf_stream, upload_file, upload_pdf
 from ..utils.logger import setup_logger
 

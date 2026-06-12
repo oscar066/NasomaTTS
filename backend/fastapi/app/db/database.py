@@ -9,7 +9,7 @@ lifespan hooks in ``main.py``.
 
 from pymongo import AsyncMongoClient
 
-from ..config import settings
+from ..utils.config import settings
 from ..utils.logger import setup_logger
 
 logger = setup_logger("nasoma.db")

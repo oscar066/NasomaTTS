@@ -19,9 +19,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from jose import jwt
 from passlib.context import CryptContext
 
-from ..config import settings
+from ..utils.config import settings
 from ..db.database import get_db
-from ..deps import get_current_user
+from ..utils.deps import get_current_user
 from ..schemas.schema import UserCreate, UserSignIn
 from ..utils.logger import setup_logger
 

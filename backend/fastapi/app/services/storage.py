@@ -16,7 +16,7 @@ import io
 from minio import Minio
 from minio.error import S3Error
 
-from ..config import settings
+from ..utils.config import settings
 from ..utils.logger import setup_logger
 
 logger = setup_logger("nasoma.services.storage")
