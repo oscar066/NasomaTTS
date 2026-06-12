@@ -21,19 +21,21 @@ GET  /pdf/{doc_id}            — Stream the stored PDF for the given document I
 GET  /pdf/{doc_id}/thumbnail  — Serve the first-page thumbnail image.
 """
 
+import asyncio
 import io
 import uuid
 from urllib.parse import urlparse
 
 import fitz  # PyMuPDF
 from bson import ObjectId
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 
 from ..utils.config import settings
 from ..db.database import get_db
 from ..utils.deps import get_current_user
 from ..services.storage import get_pdf_stream, upload_file, upload_pdf
+from ..utils.cache import cache_get, cache_set
 from ..utils.logger import setup_logger
 
 logger = setup_logger("nasoma.routes.pdf")
@@ -71,6 +73,79 @@ def _render_thumbnail(fitz_doc: fitz.Document) -> bytes | None:
         return None
 
 
+def _extract_pdf_sync(content: bytes) -> tuple[list, bytes | None, str]:
+    """Parse a PDF with PyMuPDF and return (pages, thumbnail_bytes, full_text).
+
+    This is CPU-bound work — calling fitz functions holds the GIL and blocks
+    the event loop.  It must be run via ``asyncio.to_thread`` so FastAPI can
+    continue handling other requests while extraction is in progress.
+
+    Args:
+        content: Raw bytes of the uploaded PDF file.
+
+    Returns:
+        A tuple of:
+        - ``pages``: list of per-page dicts with text, paragraphs, and bbox data.
+        - ``thumbnail_bytes``: JPEG bytes of the first page, or ``None`` on failure.
+        - ``text``: full document text (all pages joined with double newlines).
+
+    Raises:
+        Exception: Any fitz error is re-raised so the caller can return HTTP 500.
+    """
+    fitz_doc = fitz.open(stream=content, filetype="pdf")
+    pages = []
+    for i, page in enumerate(fitz_doc):
+        raw_blocks = page.get_text("blocks")
+        page_rect = page.rect
+        paragraphs = [
+            {
+                "text": blk[4].strip(),
+                "bbox": [blk[0], blk[1], blk[2], blk[3]],
+            }
+            for blk in sorted(raw_blocks, key=lambda b: (round(b[1] / 10), b[0]))
+            if blk[6] == 0 and blk[4].strip()
+        ]
+        flat_text = "\n\n".join(p["text"] for p in paragraphs)
+        pages.append({
+            "page_number": i + 1,
+            "text": flat_text,
+            "paragraphs": paragraphs,
+            "width": page_rect.width,
+            "height": page_rect.height,
+        })
+    full_text = "\n\n".join(p["text"] for p in pages)
+    thumbnail_bytes = _render_thumbnail(fitz_doc)
+    fitz_doc.close()
+    return pages, thumbnail_bytes, full_text
+
+
+def _upload_to_minio_sync(
+    content: bytes,
+    thumbnail_bytes: bytes | None,
+    base_path: str,
+    filename: str,
+) -> tuple[str | None, str | None]:
+    """Upload PDF and thumbnail to MinIO synchronously.
+
+    MinIO's Python SDK is synchronous (urllib3-backed).  Running it directly
+    in an async route blocks the event loop for the duration of the upload.
+    Call via ``asyncio.to_thread`` to keep the event loop free.
+
+    Returns:
+        ``(pdf_key, thumbnail_key)`` — either may be ``None`` if the upload
+        failed or no thumbnail was produced.
+    """
+    pdf_key = upload_pdf(content, f"{base_path}/{filename}")
+    thumbnail_key = None
+    if thumbnail_bytes:
+        thumbnail_key = upload_file(
+            thumbnail_bytes,
+            f"{base_path}/thumbnail.jpg",
+            content_type="image/jpeg",
+        )
+    return pdf_key, thumbnail_key
+
+
 @router.post("/upload")
 async def upload_pdf_route(
     pdf: UploadFile = File(...),
@@ -104,49 +179,26 @@ async def upload_pdf_route(
         logger.warning("PDF too large: %d bytes (filename=%s)", len(content), pdf.filename)
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
 
-    # Text extraction and thumbnail render via PyMuPDF
+    # ── Text extraction (CPU-bound) — run in a thread so the event loop stays
+    # free to serve other requests while PyMuPDF does its work.
     try:
-        fitz_doc = fitz.open(stream=content, filetype="pdf")
-        pages = []
-        for i, page in enumerate(fitz_doc):
-            # Extract text blocks (≈ paragraphs) sorted in reading order.
-            # block format: (x0, y0, x1, y1, text, block_no, block_type)
-            # block_type 0 = text, 1 = image — we only keep text blocks.
-            raw_blocks = page.get_text("blocks")
-            paragraphs = [
-                {"text": blk[4].strip()}
-                for blk in sorted(raw_blocks, key=lambda b: (round(b[1] / 10), b[0]))
-                if blk[6] == 0 and blk[4].strip()
-            ]
-            # Flat text is the paragraphs joined with double newlines so the
-            # speak router's \n\n split produces the same paragraph list.
-            flat_text = "\n\n".join(p["text"] for p in paragraphs)
-            pages.append({
-                "page_number": i + 1,
-                "text": flat_text,
-                "paragraphs": paragraphs,
-            })
-        text = "\n\n".join(p["text"] for p in pages)
-        thumbnail_bytes = _render_thumbnail(fitz_doc)
-        fitz_doc.close()
+        pages, thumbnail_bytes, text = await asyncio.to_thread(
+            _extract_pdf_sync, content
+        )
     except Exception as e:
         logger.error("PDF extraction failed for %s: %s", pdf.filename, e)
         raise HTTPException(status_code=500, detail="Error extracting text from PDF")
 
-    # ── MinIO uploads
+    # ── MinIO uploads (synchronous I/O) — also run in a thread for the same reason.
     # Object keys are namespaced by user ID and a shared UUID so the PDF and
     # its thumbnail sit in the same logical "folder" in the bucket.
     pdf_key: str | None = None
     thumbnail_key: str | None = None
     try:
         base_path = f"{current_user['_id']}/{uuid.uuid4()}"
-        pdf_key = upload_pdf(content, f"{base_path}/{pdf.filename}")
-        if thumbnail_bytes:
-            thumbnail_key = upload_file(
-                thumbnail_bytes,
-                f"{base_path}/thumbnail.jpg",
-                content_type="image/jpeg",
-            )
+        pdf_key, thumbnail_key = await asyncio.to_thread(
+            _upload_to_minio_sync, content, thumbnail_bytes, base_path, pdf.filename
+        )
     except Exception as e:
         # MinIO being down is non-fatal: TTS works from extracted text and the
         # dashboard falls back to the generic file icon.
@@ -191,13 +243,18 @@ async def serve_thumbnail(doc_id: str, db=Depends(get_db)):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid document ID")
 
-    doc = await db.documents.find_one({"_id": oid})
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    thumbnail_key = doc.get("thumbnail_url")
-    if not thumbnail_key:
-        raise HTTPException(status_code=404, detail="No thumbnail stored for this document")
+    # Cache the MinIO object key in Redis so repeat requests skip MongoDB.
+    # The thumbnail key is immutable after upload, so a long TTL is fine.
+    redis_key = f"cache:thumb_key:{doc_id}"
+    thumbnail_key = await cache_get(redis_key)
+    if thumbnail_key is None:
+        doc = await db.documents.find_one({"_id": oid})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+        thumbnail_key = doc.get("thumbnail_url")
+        if not thumbnail_key:
+            raise HTTPException(status_code=404, detail="No thumbnail stored for this document")
+        await cache_set(redis_key, thumbnail_key, 86400)  # 24 h — key never changes
 
     try:
         stream, size = get_pdf_stream(thumbnail_key)
@@ -218,7 +275,7 @@ async def serve_thumbnail(doc_id: str, db=Depends(get_db)):
 
 
 @router.get("/{doc_id}")
-async def serve_pdf(doc_id: str, db=Depends(get_db)):
+async def serve_pdf(doc_id: str, request: Request, db=Depends(get_db)):
     """Stream the stored PDF binary for a given document.
 
     Looks up the MinIO object key from the document record and proxies the
@@ -231,6 +288,7 @@ async def serve_pdf(doc_id: str, db=Depends(get_db)):
 
     Args:
         doc_id: MongoDB ObjectId of the document as a hex string.
+        request: Incoming FastAPI request (used to check If-None-Match).
         db: Database handle from :func:`~app.db.database.get_db`.
 
     Raises:
@@ -244,22 +302,48 @@ async def serve_pdf(doc_id: str, db=Depends(get_db)):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid document ID")
 
-    doc = await db.documents.find_one({"_id": oid})
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
+    # Cache the MinIO object key in Redis so repeat requests skip MongoDB.
+    # The pdf_key is immutable after upload so a 24-hour TTL is conservative.
+    redis_key = f"cache:pdf_key:{doc_id}"
+    cached_entry = await cache_get(redis_key)  # {"key": str, "title": str}
 
-    pdf_key = doc.get("pdf_url")
-    if not pdf_key:
-        raise HTTPException(status_code=404, detail="No PDF stored for this document")
+    if cached_entry:
+        pdf_key = cached_entry["key"]
+        safe_title = cached_entry["title"]
+    else:
+        doc = await db.documents.find_one({"_id": oid})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
 
-    # Legacy URL normalisation
-    if pdf_key.startswith("http://") or pdf_key.startswith("https://"):
-        parsed = urlparse(pdf_key)
-        bucket_prefix = f"/{settings.minio_bucket}/"
-        if parsed.path.startswith(bucket_prefix):
-            pdf_key = parsed.path[len(bucket_prefix):]
-        else:
-            raise HTTPException(status_code=422, detail="Cannot resolve legacy PDF URL")
+        pdf_key = doc.get("pdf_url")
+        if not pdf_key:
+            raise HTTPException(status_code=404, detail="No PDF stored for this document")
+
+        # Legacy URL normalisation
+        if pdf_key.startswith("http://") or pdf_key.startswith("https://"):
+            parsed = urlparse(pdf_key)
+            bucket_prefix = f"/{settings.minio_bucket}/"
+            if parsed.path.startswith(bucket_prefix):
+                pdf_key = parsed.path[len(bucket_prefix):]
+            else:
+                raise HTTPException(status_code=422, detail="Cannot resolve legacy PDF URL")
+
+        raw_title = doc.get("title", "document")
+        safe_title = raw_title.encode("latin-1", errors="replace").decode("latin-1")
+        await cache_set(redis_key, {"key": pdf_key, "title": safe_title}, 86400)
+
+    # Use the MinIO object key as a stable ETag — it contains a UUID that is
+    # unique per upload and never changes, so it's safe as a strong validator.
+    # Cache-Control: private prevents CDN/proxy caching (the PDF is user-owned)
+    # while letting the browser cache it for 24 hours.  On subsequent opens the
+    # browser skips the download entirely and renders from its local cache.
+    etag = f'"{pdf_key}"'
+
+    # Handle conditional GET: if the browser already has this version cached
+    # (i.e. it sends If-None-Match matching our ETag), return 304 immediately
+    # without touching MinIO at all.
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304)
 
     try:
         stream, size = get_pdf_stream(pdf_key)
@@ -267,16 +351,13 @@ async def serve_pdf(doc_id: str, db=Depends(get_db)):
         logger.error("Failed to fetch PDF from MinIO for doc %s: %s", doc_id, e)
         raise HTTPException(status_code=502, detail="Could not retrieve PDF from storage")
 
-    # HTTP headers only support latin-1; replace any characters that would
-    # otherwise raise an encoding error in the ASGI layer.
-    raw_title = doc.get("title", "document")
-    safe_title = raw_title.encode("latin-1", errors="replace").decode("latin-1")
-
     return StreamingResponse(
         stream,
         media_type="application/pdf",
         headers={
             "Content-Length": str(size),
             "Content-Disposition": f'inline; filename="{safe_title}.pdf"',
+            "Cache-Control": "private, max-age=86400, immutable",
+            "ETag": etag,
         },
     )

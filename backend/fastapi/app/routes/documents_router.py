@@ -308,7 +308,11 @@ async def update_progress(
         {"_id": oid},
         {"$set": {"current_page": data.current_page, "updatedAt": datetime.utcnow()}},
     )
-    # Invalidate cached document so next fetch reflects the updated progress.
-    await cache_del(f"cache:doc:{doc_id}", f"cache:docs:user:{str(current_user['_id'])}")
+    # Only invalidate the document *list* cache so the progress ring on the
+    # dashboard updates.  We intentionally keep cache:doc:{doc_id} alive —
+    # it holds the full page/text payload which never changes, and invalidating
+    # it on every page turn (which can be every 30–60 s) would mean the large
+    # document payload is never warm in Redis during a reading session.
+    await cache_del(f"cache:docs:user:{str(current_user['_id'])}")
     logger.debug("Progress saved: doc=%s page=%d user=%s", doc_id, data.current_page, current_user["_id"])
     return {"success": True, "current_page": data.current_page}
