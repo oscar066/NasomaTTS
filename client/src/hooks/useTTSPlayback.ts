@@ -245,7 +245,17 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
 
   // ── Browser Web Speech API fallback
 
-  const startBrowserAudio = (text: string, voiceURI: string, speed: number) => {
+  /**
+   * `onEnd` overrides the default `handleStop` callback so callers can supply
+   * their own "what to do when audio finishes" logic — e.g. page-advance in
+   * playPage — without triggering a full stop that would abort the SSE stream.
+   */
+  const startBrowserAudio = (
+    text: string,
+    voiceURI: string,
+    speed: number,
+    onEnd?: () => void,
+  ) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const utterance  = new SpeechSynthesisUtterance(text);
@@ -256,7 +266,7 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
         .find((v) => v.voiceURI === voiceURI);
       if (match) utterance.voice = match;
     }
-    utterance.onend  = () => handleStop();
+    utterance.onend  = onEnd ?? handleStop;
     synthRef.current = utterance;
     window.speechSynthesis.speak(utterance);
   };
@@ -323,8 +333,19 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     // Save progress each time a new page starts playing.
     persistProgress(idx);
 
-    openStream(pageText, voice, speed, 0, () => playPageRef.current?.(idx + 1));
-    if (!ttsAvailable) startBrowserAudio(pageText, voice, speed);
+    if (ttsAvailable) {
+      // Server TTS: SSE stream provides both audio and word-timing events.
+      // Let the stream's done-signal drive page advancement.
+      openStream(pageText, voice, speed, 0, () => playPageRef.current?.(idx + 1));
+    } else {
+      // Browser TTS fallback: SSE stream provides only word-timing events
+      // (no audio); the browser utterance handles audio.  Wire page-advance
+      // to the utterance's `onend` so it fires when audio actually finishes.
+      // Pass a no-op onDone to SSE so an early stream-close doesn't trigger
+      // handleStop() and abort the utterance mid-sentence.
+      openStream(pageText, voice, speed, 0, () => {});
+      startBrowserAudio(pageText, voice, speed, () => playPageRef.current?.(idx + 1));
+    }
   };
 
   // Keep the ref current so the onDone callback in openStream always calls

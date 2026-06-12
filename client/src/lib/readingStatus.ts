@@ -1,0 +1,43 @@
+import { Bookmark, BookOpen, CheckCircle2, Clock, type LucideIcon } from "lucide-react";
+
+export type ReadingStatus = "want_to_read" | "reading" | "finished" | "read_later";
+
+export interface StatusMeta {
+  label: string;
+  icon: LucideIcon;
+  color: string; // tailwind text color
+  bg: string;    // tailwind bg color
+}
+
+export const STATUS_META: Record<ReadingStatus, StatusMeta> = {
+  want_to_read: { label: "Want to Read",       icon: Bookmark,     color: "text-blue-500",   bg: "bg-blue-500/15"   },
+  reading:      { label: "Currently Reading",  icon: BookOpen,     color: "text-amber-500",  bg: "bg-amber-500/15"  },
+  finished:     { label: "Finished",           icon: CheckCircle2, color: "text-green-500",  bg: "bg-green-500/15"  },
+  read_later:   { label: "Read Later",         icon: Clock,        color: "text-purple-500", bg: "bg-purple-500/15" },
+};
+
+export const STATUSES = Object.keys(STATUS_META) as ReadingStatus[];
+
+const STORAGE_KEY = "nasoma_reading_status";
+
+function load(): Record<string, ReadingStatus> {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+export function getStatus(docId: string): ReadingStatus | null {
+  return load()[docId] ?? null;
+}
+
+export function setStatus(docId: string, status: ReadingStatus | null): void {
+  const map = load();
+  if (status === null) {
+    delete map[docId];
+  } else {
+    map[docId] = status;
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+}

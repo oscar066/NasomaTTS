@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { pdfApi, documentsApi, Document } from "@/lib/api";
+import { useDocumentsStore } from "@/store/documents";
 
 export const useDocumentUpload = () => {
   const router = useRouter();
@@ -13,6 +14,7 @@ export const useDocumentUpload = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const addDocument = useDocumentsStore((s) => s.addDocument);
 
   const uploadDocument = async (file: File): Promise<Document> => {
     if (!file) throw new Error("No file provided");
@@ -29,7 +31,11 @@ export const useDocumentUpload = () => {
       const { content, pdf_url, thumbnail_url, pages } = await pdfApi.upload(file, token);
       const title = file.name.replace(/\.[^/.]+$/, "");
 
-      return await documentsApi.create({ title, content, pdf_url, thumbnail_url, pages }, token);
+      const doc = await documentsApi.create({ title, content, pdf_url, thumbnail_url, pages }, token);
+      // Always update the dashboard store so any upload path (sidebar, empty
+      // state, grid, etc.) immediately reflects the new document.
+      addDocument(doc);
+      return doc;
     } catch (err: unknown) {
       const msg = (err as Error)?.message || "An error occurred during upload";
       setError(msg);

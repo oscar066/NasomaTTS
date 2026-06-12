@@ -12,9 +12,10 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from bson import ObjectId
 
+from .cache import TTL_USER, cache_get, cache_set
 from .config import settings
-from .db.database import get_db
-from .utils.logger import setup_logger
+from ..db.database import get_db
+from .logger import setup_logger
 
 logger = setup_logger("nasoma.deps")
 
@@ -63,11 +64,18 @@ async def get_current_user(
         logger.warning("JWT verification failed: %s", e)
         raise HTTPException(status_code=401, detail="Invalid token")
 
+    cache_key = f"cache:user:{user_id}"
+    cached = await cache_get(cache_key)
+    if cached:
+        logger.debug("User %s served from cache", user_id)
+        return cached
+
     user = await db.users.find_one({"_id": ObjectId(user_id)})
     if not user:
         # Token was valid but the account was deleted after it was issued.
         logger.warning("Token valid but user %s not found in DB", user_id)
         raise HTTPException(status_code=401, detail="User not found")
 
+    await cache_set(cache_key, user, TTL_USER)
     logger.debug("Authenticated user %s", user_id)
     return user

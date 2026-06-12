@@ -5,17 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  FileText,
-  Play,
-  MoreHorizontal,
-  Trash2,
-  Pencil,
-  Share2,
-  Calendar,
-  Check,
-  X,
-} from "lucide-react";
+import { FileText, Play, MoreHorizontal, Trash2, Pencil, Share2, Calendar, Check, X } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,41 +15,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { documentsApi, thumbnailProxyUrl, type Document } from "@/lib/api";
-
-// ── Circular SVG progress ring ────────────────────────────────────────────────
-
-function ProgressRing({ percent }: { percent: number }) {
-  const r = 16;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (percent / 100) * circ;
-  const color =
-    percent === 100 ? "#22c55e" :
-    percent > 0     ? "hsl(var(--primary))" :
-                      "hsl(var(--muted-foreground))";
-
-  return (
-    <div className="relative flex items-center justify-center w-11 h-11 flex-shrink-0">
-      <svg width="44" height="44" className="-rotate-90">
-        <circle cx="22" cy="22" r={r} fill="none" stroke="hsl(var(--secondary))" strokeWidth="3" />
-        <circle
-          cx="22" cy="22" r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth="3"
-          strokeDasharray={circ}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset 0.4s ease" }}
-        />
-      </svg>
-      <span className="absolute text-[10px] font-bold leading-none" style={{ color }}>
-        {percent === 100 ? "✓" : `${percent}%`}
-      </span>
-    </div>
-  );
-}
-
-// ── Props ─────────────────────────────────────────────────────────────────────
+import { getStatus, setStatus, type ReadingStatus } from "@/lib/readingStatus";
+import { ProgressRing }       from "./components/ProgressRing";
+import { StatusBadge }        from "./components/StatusBadge";
+import { ReadingStatusMenu }  from "./components/ReadingStatusMenu";
 
 interface FileCardProps {
   file: Document;
@@ -67,17 +26,16 @@ interface FileCardProps {
   onRename?: (id: string, newTitle: string) => void;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
-
 export function FileCard({ file, onDelete, onRename }: FileCardProps) {
   const router = useRouter();
   const { data: session } = useSession();
 
-  const [deleteLoading, setDeleteLoading]   = useState(false);
-  const [thumbError, setThumbError]         = useState(false);
-  const [isRenaming, setIsRenaming]         = useState(false);
-  const [renameValue, setRenameValue]       = useState(file.title);
-  const [renameLoading, setRenameLoading]   = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [thumbError, setThumbError]       = useState(false);
+  const [isRenaming, setIsRenaming]       = useState(false);
+  const [renameValue, setRenameValue]     = useState(file.title);
+  const [renameLoading, setRenameLoading] = useState(false);
+  const [status, setStatusState]          = useState<ReadingStatus | null>(() => getStatus(file.id));
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const hasThumbnail = !!file.thumbnail_url && !thumbError;
@@ -86,13 +44,16 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
     ? Math.min(100, Math.round(((file.current_page ?? 0) / totalPages) * 100))
     : 0;
 
-  // ── Rename ──────────────────────────────────────────────────────────────────
+  const handleStatusChange = (s: ReadingStatus | null) => {
+    setStatus(file.id, s);
+    setStatusState(s);
+  };
 
   const startRename = (e: React.MouseEvent) => {
     e.stopPropagation();
     setRenameValue(file.title);
     setIsRenaming(true);
-    // Focus after paint so the input is in the DOM
+    // Defer focus so the input is in the DOM before we select it
     setTimeout(() => renameInputRef.current?.select(), 0);
   };
 
@@ -121,17 +82,13 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
     if (e.key === "Escape") { e.preventDefault(); cancelRename(); }
   };
 
-  // ── Delete
-
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     try {
       setDeleteLoading(true);
       await documentsApi.delete(file.id, session?.accessToken ?? "");
-      toast.success("Document deleted", {
-        description: "The document has been removed from your library.",
-      });
+      toast.success("Document deleted", { description: "The document has been removed from your library." });
       onDelete?.(file.id);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
@@ -141,49 +98,32 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
     }
   };
 
-  // ── Navigation
-
   const handlePlayClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Strip paragraph data to stay within the localStorage quota.
-    const pagesForCache = file.pages?.map(({ page_number, text }) => ({
-      page_number,
-      text,
-    })) ?? null;
+    const pagesForCache = file.pages?.map(({ page_number, text }) => ({ page_number, text })) ?? null;
     try {
-      localStorage.setItem(
-        "currentDocument",
-        JSON.stringify({
-          id: file.id,
-          content: file.content,
-          title: file.title,
-          pdf_url: file.pdf_url ?? null,
-          thumbnail_url: file.thumbnail_url ?? null,
-          pages: pagesForCache,
-        })
-      );
+      localStorage.setItem("currentDocument", JSON.stringify({
+        id: file.id, content: file.content, title: file.title,
+        pdf_url: file.pdf_url ?? null, thumbnail_url: file.thumbnail_url ?? null,
+        pages: pagesForCache,
+      }));
     } catch {
-      // Storage full — navigate anyway; document reader will fetch from API.
+      // Storage full — reader will fetch from the API instead
     }
     router.push(`/documents/${file.id}?autoplay=true`);
   };
 
   const handleCardClick = () => { if (!isRenaming) router.push(`/documents/${file.id}`); };
 
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric", month: "short", day: "numeric",
-    });
-
-  // ── Render ────────────────────────────────────────────────────────────────────
+  const formatDate = (d: string) =>
+    new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 
   return (
     <div
       onClick={handleCardClick}
       className="group bg-card border border-border rounded-xl overflow-hidden hover:border-primary/40 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col"
     >
-      {/* ── Thumbnail / cover area ── */}
       <div className="relative w-full bg-muted/30 overflow-hidden" style={{ aspectRatio: "3/4", maxHeight: "240px" }}>
         {hasThumbnail ? (
           <img
@@ -205,7 +145,8 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
           </div>
         )}
 
-        {/* Dropdown — top-right of the cover */}
+        {status && <StatusBadge status={status} />}
+
         <div className="absolute top-2 right-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -222,20 +163,12 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
               <DropdownMenuItem onClick={startRename}>
                 <Pencil className="h-3.5 w-3.5 mr-2" /> Rename
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toast.info("Coming soon", { description: "Sharing is not yet available." });
-                }}
-              >
+              <ReadingStatusMenu status={status} onChange={handleStatusChange} />
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toast.info("Coming soon", { description: "Sharing is not yet available." }); }}>
                 <Share2 className="h-3.5 w-3.5 mr-2" /> Share
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={handleDelete}
-                disabled={deleteLoading}
-              >
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleDelete} disabled={deleteLoading}>
                 <Trash2 className="h-3.5 w-3.5 mr-2" />
                 {deleteLoading ? "Deleting…" : "Delete"}
               </DropdownMenuItem>
@@ -244,10 +177,7 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
         </div>
       </div>
 
-      {/* ── Card body ── */}
       <div className="flex flex-col gap-2 p-3">
-
-        {/* Title — plain text or inline rename input */}
         {isRenaming ? (
           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <Input
@@ -255,53 +185,32 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
               onKeyDown={handleRenameKey}
-              onBlur={commitRename}
               disabled={renameLoading}
               className="h-7 text-sm px-2 py-0 flex-1 min-w-0"
               maxLength={200}
             />
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 text-green-600 hover:text-green-700 flex-shrink-0"
-              onClick={commitRename}
-              disabled={renameLoading}
-            >
+            <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600 hover:text-green-700 flex-shrink-0" onClick={commitRename} disabled={renameLoading}>
               <Check className="h-3.5 w-3.5" />
             </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 text-muted-foreground flex-shrink-0"
-              onClick={cancelRename}
-              disabled={renameLoading}
-            >
+            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground flex-shrink-0" onClick={cancelRename} disabled={renameLoading}>
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
         ) : (
-          <span className="font-semibold text-sm leading-snug line-clamp-2 min-h-[2.5rem]">
-            {file.title}
-          </span>
+          <span className="font-semibold text-sm leading-snug line-clamp-2 min-h-[2.5rem]">{file.title}</span>
         )}
 
-        {/* Progress ring · date · play */}
         <div className="flex items-center gap-2">
           <ProgressRing percent={progress} />
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground flex-1 min-w-0">
             <Calendar className="h-3 w-3 flex-shrink-0" />
             <span className="truncate">{formatDate(file.createdAt)}</span>
           </span>
-          <Button
-            size="sm"
-            onClick={handlePlayClick}
-            className="h-7 px-3 text-xs bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700 text-white flex-shrink-0"
-          >
+          <Button size="sm" onClick={handlePlayClick} className="h-7 px-3 text-xs bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700 text-white flex-shrink-0">
             <Play className="h-3 w-3 mr-1" />
             Read
           </Button>
         </div>
-
       </div>
     </div>
   );

@@ -1,14 +1,5 @@
 "use client";
 
-/**
- * DocumentReaderHeader — sticky navigation bar for the document reader.
- *
- * Single responsibility: render the top bar containing the back button, logo,
- * document title, page/total counter, and the "Playing" live indicator.
- *
- * Purely presentational — all data and callbacks arrive as props.
- */
-
 import React from "react";
 import { ChevronLeft, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,13 +8,9 @@ import NasomaLogo from "../../Logo/nasoma-logo";
 interface DocumentReaderHeaderProps {
   docName: string;
   isPlaying: boolean;
-  /**
-   * 0-based index of the current page (PDF mode) or paragraph (text mode).
-   * Pass -1 when nothing is active yet — the counter will show "1".
-   */
+  // 0-based; pass -1 when nothing is active yet (counter shows "1")
   currentPage: number;
   totalPages: number;
-  /** Called when the user clicks the back button. */
   onBack: () => void;
 }
 
@@ -36,7 +23,7 @@ const DocumentReaderHeader: React.FC<DocumentReaderHeaderProps> = ({
 }) => (
   <header className="sticky top-0 z-20 h-14 grid grid-cols-[auto_1fr_auto] items-center bg-muted border-b border-border px-4 gap-3">
 
-    {/* Left — back button + logo */}
+    {/* Left — back + logo */}
     <div className="flex items-center gap-3">
       <Button
         variant="ghost"
@@ -47,10 +34,7 @@ const DocumentReaderHeader: React.FC<DocumentReaderHeaderProps> = ({
         <ChevronLeft className="h-4 w-4 mr-1" />
         Back
       </Button>
-
       <div className="w-px h-5 bg-border" />
-
-      {/* Logo — pulses while audio is playing */}
       <NasomaLogo size="sm" showPulse={isPlaying} />
     </div>
 
@@ -73,7 +57,6 @@ const DocumentReaderHeader: React.FC<DocumentReaderHeaderProps> = ({
           <span>{totalPages}</span>
         </div>
       )}
-
       {isPlaying && (
         <div className="flex items-center gap-1.5 text-xs text-primary font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />

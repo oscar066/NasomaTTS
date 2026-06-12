@@ -68,7 +68,7 @@ export default function Dashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { uploadDocument, isLoading: isUploading } = useDocumentUpload();
 
-  const { documents, isLoaded, setDocuments, addDocument, updateDocument, removeDocument } =
+  const { documents, isLoaded, setDocuments, updateDocument, removeDocument } =
     useDocumentsStore();
 
   const { data: session, status } = useSession({
@@ -128,7 +128,6 @@ export default function Dashboard() {
         description: `"${shortName}" has been processed and saved.`,
       });
       if (result?.id) {
-        addDocument(result);
         router.push(`/documents/${result.id}`);
       }
     } catch (err: unknown) {

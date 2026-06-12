@@ -20,8 +20,9 @@ from datetime import datetime
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 
+from ..utils.cache import TTL_DOC_LIST, TTL_DOCUMENT, cache_del, cache_get, cache_set
 from ..db.database import get_db
-from ..deps import get_current_user
+from ..utils.deps import get_current_user
 from ..schemas.schema import DocumentCreate, DocumentRename, ProgressUpdate
 from ..utils.logger import setup_logger
 
@@ -80,9 +81,18 @@ async def list_documents(db=Depends(get_db)):
 @router.get("/me")
 async def my_documents(current_user=Depends(get_current_user), db=Depends(get_db)):
     """Return all documents belonging to the authenticated user."""
+    user_id = str(current_user["_id"])
+    cache_key = f"cache:docs:user:{user_id}"
+
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     docs = []
     async for doc in db.documents.find({"author": current_user["_id"]}):
         docs.append(_fmt_doc(doc, _fmt_author(current_user)))
+
+    await cache_set(cache_key, docs, TTL_DOC_LIST)
     return docs
 
 
@@ -116,12 +126,19 @@ async def get_document(doc_id: str, db=Depends(get_db)):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid document ID")
 
+    cache_key = f"cache:doc:{doc_id}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     doc = await db.documents.find_one({"_id": oid})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
     author = await db.users.find_one({"_id": doc["author"]})
-    return _fmt_doc(doc, _fmt_author(author) if author else {"id": str(doc["author"])})
+    result = _fmt_doc(doc, _fmt_author(author) if author else {"id": str(doc["author"])})
+    await cache_set(cache_key, result, TTL_DOCUMENT)
+    return result
 
 
 @router.post("")
@@ -166,6 +183,7 @@ async def create_document(
         current_user["_id"],
     )
     doc = await db.documents.find_one({"_id": result.inserted_id})
+    await cache_del(f"cache:docs:user:{str(current_user['_id'])}")
     return _fmt_doc(doc, _fmt_author(current_user))
 
 
@@ -204,6 +222,7 @@ async def delete_document(
         raise HTTPException(status_code=403, detail="Not authorized to delete this document")
 
     await db.documents.delete_one({"_id": oid})
+    await cache_del(f"cache:doc:{doc_id}", f"cache:docs:user:{str(current_user['_id'])}")
     logger.info("Document deleted: id=%s by user=%s", doc_id, current_user["_id"])
     return {"success": True}
 
@@ -246,6 +265,7 @@ async def rename_document(
         {"_id": oid},
         {"$set": {"title": new_title, "updatedAt": datetime.utcnow()}},
     )
+    await cache_del(f"cache:doc:{doc_id}", f"cache:docs:user:{str(current_user['_id'])}")
     logger.info("Document renamed: id=%s title=%r user=%s", doc_id, new_title, current_user["_id"])
     return {"success": True, "title": new_title}
 
@@ -288,5 +308,7 @@ async def update_progress(
         {"_id": oid},
         {"$set": {"current_page": data.current_page, "updatedAt": datetime.utcnow()}},
     )
+    # Invalidate cached document so next fetch reflects the updated progress.
+    await cache_del(f"cache:doc:{doc_id}", f"cache:docs:user:{str(current_user['_id'])}")
     logger.debug("Progress saved: doc=%s page=%d user=%s", doc_id, data.current_page, current_user["_id"])
     return {"success": True, "current_page": data.current_page}

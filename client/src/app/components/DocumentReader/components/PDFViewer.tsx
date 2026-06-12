@@ -55,6 +55,12 @@ export interface PageData {
 interface PDFViewerProps {
   url: string;
   onPagesReady?: (pages: PageData[]) => void;
+  /**
+   * Fired as soon as the PDF structure loads and page wrapper divs are in the
+   * DOM (before text-layer indexing).  DocumentReader uses this to know it is
+   * safe to scroll to the saved resume page.
+   */
+  onDocumentLoaded?: (numPages: number) => void;
   /** 0-based page index currently being spoken. */
   highlightPage?: number;
   /**
@@ -124,6 +130,7 @@ const DocumentSkeleton: React.FC<{ width: number }> = ({ width }) => {
 const PDFViewer: React.FC<PDFViewerProps> = ({
   url,
   onPagesReady,
+  onDocumentLoaded,
   highlightPage,
   highlightParagraphIdx,
   currentWordInParagraph,
@@ -496,6 +503,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           indexedCountRef.current = 0;
           wordEntriesRef.current  = new Array(pdf.numPages);
           setNumPages(pdf.numPages);
+          // Notify parent that page wrapper divs are now in the DOM — safe
+          // to scroll to the saved resume page.
+          onDocumentLoaded?.(pdf.numPages);
         }}
         loading={<DocumentSkeleton width={containerWidth || 800} />}
         error={

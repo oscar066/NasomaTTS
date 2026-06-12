@@ -7,12 +7,13 @@ context manager.
 
 Server startup order:
   1. MongoDB connection pool is opened.
-  2. NeuTTS model is loaded (or skipped gracefully if unavailable).
-  3. The application begins serving requests.
+  2. Redis cache client is connected.
+  3. NeuTTS model is loaded (or skipped gracefully if unavailable).
+  4. The application begins serving requests.
 
 Shutdown order:
   1. In-flight requests are allowed to complete.
-  2. MongoDB connection pool is closed.
+  2. MongoDB and Redis connections are closed.
 """
 
 from contextlib import asynccontextmanager
@@ -20,6 +21,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from .utils.cache import close_cache, connect_cache
+from .utils.config import settings
 from .db.database import close_db, connect_db
 from .routes import auth_router, documents_router, pdf_router, speak_router, voices_router
 from .services.tts import tts_service
@@ -38,11 +41,13 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Starting up NasomaTTS API")
     await connect_db()
+    await connect_cache(settings.redis_url)
     await tts_service.load()
     logger.info("Startup complete")
     yield
     logger.info("Shutting down NasomaTTS API")
     await close_db()
+    await close_cache()
 
 
 app = FastAPI(

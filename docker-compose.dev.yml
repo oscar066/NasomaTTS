@@ -1,35 +1,49 @@
 services:
-  # Next.js Client — binds to 127.0.0.1:3001 so only host nginx can reach it
+  # Next.js Client — dev mode with HMR
   client:
     build:
       context: ./client
       dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: /api
-        API_URL: http://nasoma_api_prod:8000
-    container_name: nasoma_client_prod
+      target: deps          # stop after npm ci, skip the full production build
+    container_name: nasoma_client_dev
+    command: npm run dev
     environment:
-      - API_URL=http://nasoma_api_prod:8000
-      - NEXTAUTH_URL=${NEXTAUTH_URL}
-      - NEXTAUTH_URL_INTERNAL=http://nasoma_client_prod:3000
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=/api
+      - API_URL=http://nasoma_api_dev:8000
+      - NEXTAUTH_URL=http://localhost:3001
+      - NEXTAUTH_URL_INTERNAL=http://nasoma_client_dev:3000
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       - JWT_SECRET=${JWT_SECRET}
+    volumes:
+      - ./client:/app
+      - /app/node_modules    # keep the container's installed node_modules intact
     ports:
-      - "127.0.0.1:3001:3000"
+      - "3001:3000"
     depends_on:
       - api
     networks:
       - nasoma-network
-    restart: always
+    develop:
+      watch:
+        - action: sync
+          path: ./client/src
+          target: /app/src
+        - action: sync
+          path: ./client/public
+          target: /app/public
+        - action: rebuild
+          path: ./client/package.json
 
-  # FastAPI Backend — binds to 127.0.0.1:8001
+  # FastAPI Backend — uvicorn with --reload
   api:
     build:
       context: ./backend/fastapi
       dockerfile: Dockerfile
-    container_name: nasoma_api_prod
+    container_name: nasoma_api_dev
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     environment:
-      - MONGODB_URL=mongodb://nasoma-mongo:27017
+      - MONGODB_URL=${MONGODB_URL:-mongodb://nasoma-mongo:27017}
       - MINIO_ENDPOINT=nasoma-minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
@@ -37,8 +51,10 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - MONGODB_DB=${MONGODB_DB}
       - REDIS_URL=redis://nasoma-redis:6379
+    volumes:
+      - ./backend/fastapi:/app
     ports:
-      - "127.0.0.1:8001:8000"
+      - "8001:8000"
     depends_on:
       mongo:
         condition: service_healthy
@@ -48,16 +64,24 @@ services:
         condition: service_healthy
     networks:
       - nasoma-network
-    restart: always
+    develop:
+      watch:
+        - action: sync
+          path: ./backend/fastapi/app
+          target: /app/app
+        - action: rebuild
+          path: ./backend/fastapi/requirements.txt
 
   # MongoDB
   mongo:
     image: mongo:8
-    container_name: nasoma_mongo_prod
+    container_name: nasoma_mongo_dev
     hostname: nasoma-mongo
     command: mongod --quiet
     volumes:
       - nasoma_mongo_data:/data/db
+    ports:
+      - "27017:27017"
     healthcheck:
       test: ["CMD-SHELL", "mongosh --eval \"db.adminCommand('ping')\" --quiet || exit 1"]
       interval: 30s
@@ -66,16 +90,17 @@ services:
       start_period: 40s
     networks:
       - nasoma-network
-    restart: always
 
   # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: nasoma_redis_prod
+    container_name: nasoma_redis_dev
     hostname: nasoma-redis
     volumes:
       - nasoma_redis_data:/data
     command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"          # exposed locally for inspection
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -83,12 +108,11 @@ services:
       retries: 5
     networks:
       - nasoma-network
-    restart: always
 
   # MinIO Object Storage
   minio:
     image: minio/minio
-    container_name: nasoma_minio_prod
+    container_name: nasoma_minio_dev
     hostname: nasoma-minio
     environment:
       - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
@@ -96,6 +120,9 @@ services:
     volumes:
       - nasoma_minio_data:/data
     command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"          # MinIO web console
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s
@@ -103,7 +130,7 @@ services:
       retries: 5
     networks:
       - nasoma-network
-    restart: always
+
 
 networks:
   nasoma-network:
