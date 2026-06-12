@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Keep authenticated and private routes out of search indexes
+Disallow: /dashboard
+Disallow: /reader
+Disallow: /api/
+
+Sitemap: https://me-nasoma.com/sitemap.xml
