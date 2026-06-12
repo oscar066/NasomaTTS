@@ -20,6 +20,13 @@ graphql-upload.zip
 backend/.DS_Store
 backend/server/.DS_Store
 backend/docker-compose.services.yml
+backend/fastapi/requirements-test.txt
+backend/fastapi/pytest.ini
+
+# Python bytecode — covers every subdirectory at any depth
+**/__pycache__/
+**/*.pyc
+**/*.pyo
 
 # Ignore doc
 docs/
