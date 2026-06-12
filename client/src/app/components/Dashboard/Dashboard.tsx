@@ -63,7 +63,7 @@ function EmptyState({ onUpload, isUploading }: EmptyStateProps) {
 export default function Dashboard() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { uploadDocument, isLoading: isUploading } = useDocumentUpload();
@@ -139,7 +139,7 @@ export default function Dashboard() {
   };
 
   const firstName = session?.user?.name?.split(" ")[0] ?? "there";
-  const isInitialLoad = loading && !isLoaded;
+  const isInitialLoad = !isLoaded || loading;
 
   if (status === "loading") {
     return (
