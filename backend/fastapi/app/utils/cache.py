@@ -26,9 +26,10 @@ logger = setup_logger("nasoma.cache")
 _redis: Redis | None = None
 
 # TTLs in seconds
-TTL_USER     = 300   # 5 min — short enough to catch deleted accounts
-TTL_DOCUMENT = 600   # 10 min
-TTL_DOC_LIST = 60    # 1 min — list changes on every upload/rename/delete
+TTL_USER     = 300    # 5 min — short enough to catch deleted accounts
+TTL_DOCUMENT = 600    # 10 min
+TTL_DOC_LIST = 300    # 5 min — progress updates no longer invalidate this,
+                      # so only create/rename/delete bust the list cache
 
 
 async def connect_cache(url: str) -> None:
