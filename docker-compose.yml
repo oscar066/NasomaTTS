@@ -36,12 +36,15 @@ services:
       - MINIO_BUCKET=${MINIO_BUCKET}
       - JWT_SECRET=${JWT_SECRET}
       - MONGODB_DB=${MONGODB_DB}
+      - REDIS_URL=redis://nasoma-redis:6379
     ports:
       - "127.0.0.1:8001:8000"
     depends_on:
       mongo:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - nasoma-network
@@ -52,14 +55,32 @@ services:
     image: mongo:8
     container_name: nasoma_mongo_prod
     hostname: nasoma-mongo
+    command: mongod --quiet
     volumes:
       - nasoma_mongo_data:/data/db
     healthcheck:
       test: ["CMD-SHELL", "mongosh --eval \"db.adminCommand('ping')\" --quiet || exit 1"]
-      interval: 15s
-      timeout: 30s
+      interval: 30s
+      timeout: 10s
       retries: 5
       start_period: 40s
+    networks:
+      - nasoma-network
+    restart: always
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: nasoma_redis_prod
+    hostname: nasoma-redis
+    volumes:
+      - nasoma_redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - nasoma-network
     restart: always
@@ -92,4 +113,6 @@ volumes:
   nasoma_mongo_data:
     driver: local
   nasoma_minio_data:
+    driver: local
+  nasoma_redis_data:
     driver: local
