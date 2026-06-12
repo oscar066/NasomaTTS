@@ -148,6 +148,7 @@ const DocumentReader: React.FC = () => {
                 highlightParagraphIdx={currentParagraphIndex}
                 currentWordInParagraph={currentWordIndex}
                 paragraphWordBoundaries={paragraphWordBoundaries}
+                storedPages={storedPages}
               />
             </div>
           </div>

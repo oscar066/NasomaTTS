@@ -21,20 +21,23 @@ from ..utils.logger import setup_logger
 
 logger = setup_logger("nasoma.services.storage")
 
+# Module-level singleton.  The MinIO SDK uses urllib3's connection pool
+# internally, which is thread-safe.  Sharing one instance avoids creating a
+# new TCP connection (and TLS handshake) on every upload/download call.
+_minio_client: Minio | None = None
+
 
 def _client() -> Minio:
-    """Create and return a MinIO client configured from application settings.
-
-    A new client is instantiated on each call.  The MinIO SDK is synchronous,
-    so sharing a single instance across async tasks would require a lock.
-    Creating a fresh client is cheap and avoids that complexity.
-    """
-    return Minio(
-        settings.minio_endpoint,
-        access_key=settings.minio_access_key,
-        secret_key=settings.minio_secret_key,
-        secure=False,  # Set to True when MinIO is behind TLS in production.
-    )
+    """Return the shared MinIO client, creating it on first call."""
+    global _minio_client
+    if _minio_client is None:
+        _minio_client = Minio(
+            settings.minio_endpoint,
+            access_key=settings.minio_access_key,
+            secret_key=settings.minio_secret_key,
+            secure=False,  # Set to True when MinIO is behind TLS in production.
+        )
+    return _minio_client
 
 
 def ensure_bucket(client: Minio) -> None:
@@ -121,8 +124,10 @@ def get_pdf_stream(object_name: str) -> tuple:
     """
     client = _client()
     response = client.get_object(settings.minio_bucket, object_name)
-    stat = client.stat_object(settings.minio_bucket, object_name)
-    return response, stat.size
+    # Read content-length from the response headers rather than issuing a
+    # separate stat_object call — saves one extra round-trip to MinIO.
+    size = int(response.headers.get("content-length", 0))
+    return response, size
 
 
 def delete_pdf(object_name: str) -> None:

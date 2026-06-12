@@ -64,7 +64,7 @@ export default function HeroSection() {
                 className="opacity-0 animate-fade-up text-base md:text-lg mb-10 text-muted-foreground leading-relaxed max-w-lg"
                 style={{ animationDelay: "0.4s" }}
               >
-                Nasoma transforms any PDF or document into natural, engaging audio
+                Me Nasoma transforms any PDF or document into natural, engaging audio
                 that fits your life. Listen while you commute, exercise, or relax
                 — saving time and reducing eye strain.
               </p>

@@ -25,7 +25,7 @@ const plans = [
   {
     name: "Pro",
     description: "Ideal for avid readers",
-    monthlyPrice: 29,
+    monthlyPrice: 9,
     period: "per month",
     features: [
       "100,000 characters per month",
@@ -115,9 +115,9 @@ export default function PricingSection() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           {plans.map((plan, index) => (
-            <FadeIn key={index} delay={index * 100}>
+            <FadeIn key={index} delay={index * 100} className="h-full">
             <div
-              className={`relative flex flex-col p-8 rounded-xl transition-all duration-300 hover:shadow-xl
+              className={`relative h-full flex flex-col p-8 rounded-xl transition-all duration-300 hover:shadow-xl
                 ${
                   plan.highlighted
                     ? "border-2 border-primary bg-card shadow-lg shadow-primary/10 scale-[1.02]"

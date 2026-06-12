@@ -7,7 +7,7 @@ const steps = [
     icon: Upload,
     title: "Upload Your Document",
     description:
-      "Import any PDF, article, or text file. Nasoma accepts all major document formats in seconds.",
+      "Import any PDF, article, or text file. Me Nasoma accepts all major document formats in seconds.",
     accent: "from-primary to-indigo-600",
   },
   {
@@ -60,9 +60,9 @@ export default function HowItWorksSection() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {steps.map((s, index) => (
-              <FadeIn key={index} delay={index * 120}>
+              <FadeIn key={index} delay={index * 120} className="h-full">
               <div
-                className="group flex flex-col items-center text-center p-8 rounded-2xl bg-card border border-border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 relative"
+                className="group h-full flex flex-col items-center text-center p-8 rounded-2xl bg-card border border-border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 relative"
               >
                 {/* Step icon */}
                 <div className="relative mb-6 z-10">
@@ -77,7 +77,7 @@ export default function HowItWorksSection() {
                 <h3 className="text-base font-semibold mb-2.5 group-hover:text-primary transition-colors duration-300">
                   {s.title}
                 </h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">
+                <p className="text-sm text-muted-foreground leading-relaxed flex-1">
                   {s.description}
                 </p>
               </div>

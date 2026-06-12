@@ -5,7 +5,7 @@ import FadeIn from "@/app/components/ui/FadeIn";
 const testimonials = [
   {
     quote:
-      "Nasoma has completely changed how I consume content. I catch up on research papers during my morning run — something I never thought possible.",
+      "Me Nasoma has completely changed how I consume content. I catch up on research papers during my morning run — something I never thought possible.",
     author: "Sarah Johnson",
     role: "Content Creator",
     company: "TechTalk Podcast",
@@ -15,7 +15,7 @@ const testimonials = [
   },
   {
     quote:
-      "As an educator, Nasoma has been instrumental in making our courses more accessible for students with visual impairments.",
+      "As an educator, Me Nasoma has been instrumental in making our courses more accessible for students with visual impairments.",
     author: "Michael Chen",
     role: "Education Director",
     company: "LearnSmart",
@@ -68,9 +68,9 @@ export default function TestimonialsSection() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
           {testimonials.map((testimonial, index) => (
-            <FadeIn key={index} delay={index * 100}>
+            <FadeIn key={index} delay={index * 100} className="h-full">
             <div
-              className="relative flex flex-col rounded-2xl bg-card border border-border overflow-hidden
+              className="relative h-full flex flex-col rounded-2xl bg-card border border-border overflow-hidden
                          hover:shadow-xl hover:border-primary/20 transition-all duration-300 hover:-translate-y-1"
             >
               {/* Colorful top accent bar */}

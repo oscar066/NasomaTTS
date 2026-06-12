@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { Twitter, Linkedin, Github, Mail } from "lucide-react";
+import NasomaLogo from "@/app/components/Logo/nasoma-logo";
 
 const YEAR = new Date().getFullYear();
 
@@ -30,24 +33,8 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
           {/* Brand */}
           <div className="md:col-span-1">
-            <Link href="/" className="flex items-center gap-2 mb-4">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-6 w-6 text-primary"
-              >
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" x2="12" y1="19" y2="22" />
-              </svg>
-              <span className="text-xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-                Nasoma
-              </span>
+            <Link href="/" className="inline-flex mb-4">
+              <NasomaLogo size="sm" showText />
             </Link>
             <p className="text-sm text-muted-foreground mb-5 leading-relaxed">
               AI-powered text-to-speech that turns any document into natural,
@@ -128,7 +115,7 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="border-t border-border pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-xs text-muted-foreground">
-            © {YEAR} Nasoma. All rights reserved.
+            © {YEAR} Me Nasoma. All rights reserved.
           </p>
           <div className="flex flex-wrap gap-x-5 gap-y-1 justify-center">
             {legalLinks.map((l) => (
