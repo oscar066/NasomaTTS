@@ -55,12 +55,27 @@ export const authApi = {
 
 // ── Documents
 
+export interface StoredParagraph {
+  text: string;
+  /**
+   * Bounding box in PDF user-space coordinates [x0, y0, x1, y1] (points at
+   * 72 DPI, origin at top-left of the page).  Present for documents uploaded
+   * after coordinate-overlay highlighting was introduced; undefined for legacy
+   * paragraphs.
+   */
+  bbox?: [number, number, number, number];
+}
+
 export interface StoredPage {
   page_number: number;
   text: string;
+  /** Native PDF page width in points (72 DPI). Used to scale bbox overlays. */
+  width?: number;
+  /** Native PDF page height in points (72 DPI). */
+  height?: number;
   /** Paragraph blocks extracted by PyMuPDF. Present for documents uploaded
    *  after paragraph-level TTS was introduced; undefined for legacy docs. */
-  paragraphs?: Array<{ text: string }>;
+  paragraphs?: StoredParagraph[];
 }
 
 export interface Document {
