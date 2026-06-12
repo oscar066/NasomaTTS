@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useRef, useEffect, useState } from "react";
+import React, { useMemo, useRef, useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2 } from "lucide-react";
@@ -58,13 +58,31 @@ const DocumentReader: React.FC = () => {
 
   const pdfScrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!pdfScrollRef.current || currentTTSPage < 0) return;
+  // Set to true once PDFViewer signals its page wrapper divs are in the DOM.
+  // We can't scroll to a page before that because querySelector returns null.
+  // Reset whenever the PDF URL changes so navigating between documents
+  // re-triggers the initial scroll.
+  const [pdfLoaded, setPdfLoaded] = useState(false);
+  useEffect(() => { setPdfLoaded(false); }, [pdfUrl]);
+
+  const scrollToTTSPage = useCallback((page: number) => {
+    if (!pdfScrollRef.current || page < 0) return;
     const pageEl = pdfScrollRef.current.querySelector<HTMLElement>(
-      `[data-nasoma-page="${currentTTSPage}"]`
+      `[data-nasoma-page="${page}"]`
     );
     pageEl?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [currentTTSPage]);
+  }, []);
+
+  // Three triggers that should scroll the viewer to the active TTS page:
+  //   1. `currentTTSPage` changes  → page advance during playback
+  //   2. `pdfLoaded` becomes true  → PDF just loaded; scroll to saved resume page
+  //   3. `isPlaying` becomes true  → user pressed play while already on the
+  //                                  saved page (page index didn't change, so
+  //                                  `currentTTSPage` alone wouldn't re-fire)
+  useEffect(() => {
+    scrollToTTSPage(currentTTSPage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTTSPage, pdfLoaded, isPlaying, scrollToTTSPage]);
 
   // Must be above any early return to keep hook call order stable
   const paragraphWordBoundaries = useMemo(() => {
@@ -125,6 +143,7 @@ const DocumentReader: React.FC = () => {
             <div className="max-w-4xl mx-auto px-6 py-6" style={{ paddingBottom: `${OVERLAY_HEIGHT}px` }}>
               <PDFViewer
                 url={pdfUrl}
+                onDocumentLoaded={() => setPdfLoaded(true)}
                 highlightPage={currentTTSPage}
                 highlightParagraphIdx={currentParagraphIndex}
                 currentWordInParagraph={currentWordIndex}
