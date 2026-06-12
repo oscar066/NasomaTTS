@@ -33,6 +33,7 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { StoredPage } from "@/lib/api";
 
 pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
@@ -80,6 +81,13 @@ interface PDFViewerProps {
    * Absent for legacy documents — the whole page is treated as one paragraph.
    */
   paragraphWordBoundaries?: number[];
+  /**
+   * All stored pages for the document (from the API).  When the active
+   * paragraph has a `bbox`, PDFViewer renders a coordinate-based overlay div
+   * instead of the word-count reading window.  Falls back to the reading
+   * window for legacy documents that lack bbox data.
+   */
+  storedPages?: StoredPage[];
 }
 
 interface WordEntry {
@@ -135,6 +143,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   highlightParagraphIdx,
   currentWordInParagraph,
   paragraphWordBoundaries,
+  storedPages,
 }) => {
   const [numPages, setNumPages] = useState(0);
   const [containerWidth, setContainerWidth] = useState(800);
@@ -142,6 +151,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   // Incremented each time a page finishes indexing so highlight effects
   // re-run even though wordEntriesRef itself is a ref (not state).
   const [indexedCount, setIndexedCount] = useState(0);
+
+  // When the active paragraph has a bbox we render a coordinate-based overlay
+  // div instead of manipulating text-layer spans.  null = no overlay.
+  const [paraOverlay, setParaOverlay] = useState<{
+    pageIdx: number;
+    bbox: [number, number, number, number];
+  } | null>(null);
 
   // ── Lazy rendering ────────────────────────────────────────────────────────
   // Rendering 100+ PDF canvases simultaneously blocks the main thread.
@@ -186,6 +202,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     setNumPages(0);
     setIndexedCount(0);
     setRenderedPages(new Set([0, 1, 2]));
+    setParaOverlay(null);
   }, [url]);
 
   // ── IntersectionObserver — activate pages as they approach the viewport ──
@@ -432,21 +449,49 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       entries.length - 1
     );
 
-    // ── 3b. Apply reading-window tint ────────────────────────────────────
-    const winStart = Math.max(0,               wordEntryIdx - WINDOW_BEFORE);
-    const winEnd   = Math.min(entries.length,  wordEntryIdx + WINDOW_AFTER + 1);
-    const newWindowSpans: HTMLElement[] = [];
+    // ── 3b. Paragraph overlay OR reading-window fallback ────────────────
+    //
+    // Prefer a coordinate-based overlay div (bbox) when the stored page data
+    // has it — this is pixel-perfect and requires no text-layer span mapping.
+    // Fall back to the word-count reading window for legacy documents.
+    const activeBbox = storedPages?.[page]?.paragraphs?.[pIdx]?.bbox;
 
-    for (let i = winStart; i < winEnd; i++) {
-      const sp = entries[i]?.span;
-      if (sp) {
-        sp.classList.add("nasoma-window");
-        newWindowSpans.push(sp);
+    console.debug(
+      `[PDFViewer highlight] page=${page} pIdx=${pIdx} wIdx=${wIdx}`,
+      `| storedPages[page] paras=${storedPages?.[page]?.paragraphs?.length ?? "none"}`,
+      `| activeBbox=${JSON.stringify(activeBbox)}`,
+      `| containerWidth=${containerWidth}`,
+      `| pageWidth=${storedPages?.[page]?.width}`,
+    );
+
+    if (activeBbox) {
+      // Clear any leftover window spans from a previous fallback pass.
+      for (const sp of activeWindowSpansRef.current) {
+        sp.classList.remove("nasoma-window");
       }
-    }
-    activeWindowSpansRef.current = newWindowSpans;
+      activeWindowSpansRef.current = [];
 
-    // ── 3c. Apply word highlight 
+      // Trigger a React re-render that places the overlay div.
+      setParaOverlay({ pageIdx: page, bbox: activeBbox });
+    } else {
+      // No bbox — clear overlay and use the reading-window fallback.
+      setParaOverlay(null);
+
+      const winStart = Math.max(0,              wordEntryIdx - WINDOW_BEFORE);
+      const winEnd   = Math.min(entries.length, wordEntryIdx + WINDOW_AFTER + 1);
+      const newWindowSpans: HTMLElement[] = [];
+
+      for (let i = winStart; i < winEnd; i++) {
+        const sp = entries[i]?.span;
+        if (sp) {
+          sp.classList.add("nasoma-window");
+          newWindowSpans.push(sp);
+        }
+      }
+      activeWindowSpansRef.current = newWindowSpans;
+    }
+
+    // ── 3c. Apply word highlight ─────────────────────────────────────────
     const wordEntry = entries[wordEntryIdx];
     if (wordEntry) {
       wordEntry.span.classList.add("nasoma-word");
@@ -459,11 +504,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [highlightPage, highlightParagraphIdx, currentWordInParagraph, paragraphWordBoundaries, indexedCount]);
+  }, [highlightPage, highlightParagraphIdx, currentWordInParagraph, paragraphWordBoundaries, storedPages, indexedCount]);
 
   // Clear stale highlights on page change
   //
   // Scrolling to the new page is handled by DocumentReader (which owns the
+  // scroll container).
 
   useEffect(() => {
     if (highlightPage == null || highlightPage < 0) return;
@@ -476,6 +522,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       activeWordSpanRef.current.classList.remove("nasoma-word");
       activeWordSpanRef.current = null;
     }
+    setParaOverlay(null);
   }, [highlightPage]);
 
   // Render
@@ -523,6 +570,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                   key={i + 1}
                   ref={(el) => { pageRefs.current[i] = el; }}
                   data-nasoma-page={i}
+                  style={{ position: "relative" }}
                 >
                   {isActivated ? (
                     <Page
@@ -541,6 +589,44 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                        accurately represents the full document length. */
                     <DocumentSkeleton width={containerWidth || 800} />
                   )}
+
+                  {/* ── Paragraph bbox overlay ──────────────────────────────
+                      Rendered as an absolutely-positioned div scaled from PDF
+                      user-space coordinates to the canvas pixel dimensions.
+                      pointer-events: none so text selection in the text layer
+                      still works; z-index: 2 keeps it above the canvas but
+                      the text layer and annotations remain interactive below. */}
+                  {isActivated && paraOverlay?.pageIdx === i && (() => {
+                    const pd = storedPages?.[i];
+                    console.debug(
+                      `[PDFViewer render overlay] page=${i}`,
+                      `pd.width=${pd?.width} pd.height=${pd?.height}`,
+                      `bbox=${JSON.stringify(paraOverlay.bbox)}`,
+                      `containerWidth=${containerWidth}`,
+                    );
+                    if (!pd?.width || !pd?.height) return null;
+                    const [bx0, by0, bx1, by1] = paraOverlay.bbox;
+                    const w     = containerWidth || 800;
+                    const scale = w / pd.width;
+                    return (
+                      <div
+                        style={{
+                          position:      "absolute",
+                          left:          bx0 * scale,
+                          top:           by0 * scale,
+                          width:         (bx1 - bx0) * scale,
+                          height:        (by1 - by0) * scale,
+                          background:    "rgba(99, 102, 241, 0.25)",
+                          border:        "2px solid rgba(99, 102, 241, 0.8)",
+                          borderRadius:  "3px",
+                          pointerEvents: "none",
+                          zIndex:        10,
+                          transition:    "top 0.15s ease, height 0.15s ease",
+                          outline:       "1px dashed red",  // DEBUG: remove after testing
+                        }}
+                      />
+                    );
+                  })()}
                 </div>
               );
             })}
