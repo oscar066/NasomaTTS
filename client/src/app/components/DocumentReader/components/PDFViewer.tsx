@@ -172,6 +172,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   );
 
   const pageRefs       = useRef<(HTMLDivElement | null)[]>([]);
+  const paraOverlayRef = useRef<HTMLDivElement | null>(null);
   const wordEntriesRef = useRef<WordEntry[][]>([]);
 
   // Track which spans currently carry each CSS class for O(1) removal.
@@ -503,14 +504,26 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       activeWindowSpansRef.current = newWindowSpans;
     }
 
-    // ── 3c. Word highlight disabled — scroll only
-    const wordEntry = entries[wordEntryIdx];
-    if (wordEntry) {
-      wordEntry.span.scrollIntoView({ behavior: "instant", block: "nearest" });
+    // ── 3c. Word highlight disabled — scroll only for non-bbox fallback
+    if (!activeBbox) {
+      const wordEntry = entries[wordEntryIdx];
+      if (wordEntry) {
+        wordEntry.span.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightPage, highlightParagraphIdx, currentWordInParagraph, paragraphWordBoundaries, storedPages, indexedCount]);
+
+  // Scroll to the paragraph overlay whenever it changes (bbox-based highlighting)
+  useEffect(() => {
+    if (!paraOverlay) return;
+    // Small delay so the overlay div is in the DOM before we scroll to it
+    const id = setTimeout(() => {
+      paraOverlayRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 50);
+    return () => clearTimeout(id);
+  }, [paraOverlay?.pageIdx, paraOverlay?.paragraphIdx]);
 
   // Clear stale highlights on page change
   //
@@ -621,6 +634,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                     return (
                       <div
                         key={`${paraOverlay.pageIdx}-${paraOverlay.paragraphIdx}`}
+                        ref={paraOverlayRef}
                         style={{
                           position:      "absolute",
                           left:          bx0 * scale,
