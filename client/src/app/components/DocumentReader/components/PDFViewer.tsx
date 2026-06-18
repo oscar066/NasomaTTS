@@ -407,11 +407,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     }
     activeWindowSpansRef.current = [];
 
-    // ── 2. Clear previous word highlight ─────────────────────────────────
-    if (activeWordSpanRef.current) {
-      activeWordSpanRef.current.classList.remove("nasoma-word");
-      activeWordSpanRef.current = null;
-    }
+    // ── 2. Clear previous word highlight (disabled — word highlighting off)
+    activeWordSpanRef.current = null;
 
     const page = highlightPage ?? -1;
     const pIdx = highlightParagraphIdx ?? -1;
@@ -506,15 +503,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       activeWindowSpansRef.current = newWindowSpans;
     }
 
-    // ── 3c. Apply word highlight ─────────────────────────────────────────
+    // ── 3c. Word highlight disabled — scroll only
     const wordEntry = entries[wordEntryIdx];
     if (wordEntry) {
-      wordEntry.span.classList.add("nasoma-word");
-      activeWordSpanRef.current = wordEntry.span;
-
-      // Keep the current word in view.  Use "nearest" so the container only
-      // scrolls when the word is actually outside the visible area — firing
-      // every ~400 ms with "center" would produce constant jittery animations.
       wordEntry.span.scrollIntoView({ behavior: "instant", block: "nearest" });
     }
 
