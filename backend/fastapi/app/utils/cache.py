@@ -8,9 +8,10 @@ dependency.
 
 Cache key conventions
 ---------------------
-  cache:user:{user_id}     — serialised user document, TTL 5 min
-  cache:doc:{doc_id}       — serialised formatted document, TTL 10 min
-  cache:docs:user:{user_id} — serialised document list for a user, TTL 60 s
+  cache:doc:{doc_id}        — formatted document response, TTL 10 min
+  cache:docs:user:{user_id} — document list for a user, TTL 5 min
+  cache:pdf_key:{doc_id}    — MinIO PDF object key + title, TTL 24 h
+  cache:thumb_key:{doc_id}  — MinIO thumbnail object key, TTL 24 h
 """
 
 import json
@@ -26,10 +27,8 @@ logger = setup_logger("nasoma.cache")
 _redis: Redis | None = None
 
 # TTLs in seconds
-TTL_USER     = 300    # 5 min — short enough to catch deleted accounts
 TTL_DOCUMENT = 600    # 10 min
-TTL_DOC_LIST = 300    # 5 min — progress updates no longer invalidate this,
-                      # so only create/rename/delete bust the list cache
+TTL_DOC_LIST = 300    # 5 min — only create/rename/delete bust the list cache
 
 
 async def connect_cache(url: str) -> None:

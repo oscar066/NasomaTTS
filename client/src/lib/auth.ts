@@ -33,12 +33,12 @@ export const authOptions = {
         if (!credentials?.email || !credentials?.password) {
           throw new Error("Email and password are required");
         }
-        const { token } = await authApi.signin({
+        const { access_token } = await authApi.signin({
           email:    credentials.email,
           password: credentials.password,
         });
-        const user = await authApi.me(token);
-        return { id: user.id, email: user.email, token };
+        const user = await authApi.me(access_token);
+        return { id: user.id, email: user.email, token: access_token };
       },
     }),
   ],

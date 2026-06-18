@@ -34,22 +34,52 @@ async function request<T>(
 
 export const authApi = {
   signup: (body: { username: string; email: string; password: string }) =>
-    request<{ token: string }>("/auth/signup", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
+    request<{ id: string; email: string; username: string; is_active: boolean }>(
+      "/auth/register",
+      { method: "POST", body: JSON.stringify(body) }
+    ),
 
-  signin: (body: { email: string; password: string }) =>
-    request<{ token: string }>("/auth/signin", {
+  // FastAPI Users login uses OAuth2 form data: field name "username" holds the email.
+  signin: (body: { email: string; password: string }) => {
+    const params = new URLSearchParams();
+    params.set("username", body.email);
+    params.set("password", body.password);
+    return request<{ access_token: string; token_type: string }>("/auth/login", {
       method: "POST",
-      body: JSON.stringify(body),
-    }),
+      body: params.toString(),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
+  },
 
   me: (token: string) =>
-    request<{ id: string; username: string; email: string; avatar: string }>(
-      "/auth/me",
+    request<{ id: string; username: string; email: string; avatar: string; plan: string }>(
+      "/users/me",
       {},
       token
+    ),
+
+  forgotPassword: (email: string) =>
+    request<null>("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (token: string, password: string) =>
+    request<null>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, password }),
+    }),
+
+  requestVerification: (email: string) =>
+    request<null>("/auth/request-verify-token", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  verifyEmail: (token: string) =>
+    request<{ id: string; email: string; is_verified: boolean }>(
+      "/auth/verify",
+      { method: "POST", body: JSON.stringify({ token }) }
     ),
 };
 

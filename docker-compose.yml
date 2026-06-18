@@ -37,6 +37,8 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - MONGODB_DB=${MONGODB_DB}
       - REDIS_URL=redis://nasoma-redis:6379
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - FRONTEND_URL=${FRONTEND_URL:-https://me-nasoma.com}
     ports:
       - "127.0.0.1:8001:8000"
     depends_on:

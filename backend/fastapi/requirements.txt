@@ -1,8 +1,7 @@
 fastapi[standard]==0.136.1
+fastapi-users[beanie]==14.0.1
+motor==3.7.1
 pymongo==4.17.0
-python-jose[cryptography]==3.5.0
-passlib[bcrypt]==1.7.4
-bcrypt==4.0.1
 pymupdf==1.27.2.3
 python-dotenv==1.2.2
 pydantic-settings==2.14.0
@@ -10,3 +9,4 @@ pydantic[email]==2.13.3
 colorama==0.4.6
 minio==7.2.15
 redis[asyncio]==5.2.1
+resend==2.10.0

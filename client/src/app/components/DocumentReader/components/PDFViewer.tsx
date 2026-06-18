@@ -156,7 +156,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   // div instead of manipulating text-layer spans.  null = no overlay.
   const [paraOverlay, setParaOverlay] = useState<{
     pageIdx: number;
+    paragraphIdx: number;
     bbox: [number, number, number, number];
+    opacity: number;
   } | null>(null);
 
   // ── Lazy rendering ────────────────────────────────────────────────────────
@@ -471,8 +473,21 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       }
       activeWindowSpansRef.current = [];
 
-      // Trigger a React re-render that places the overlay div.
-      setParaOverlay({ pageIdx: page, bbox: activeBbox });
+      // Fade out near end of paragraph so the transition to the next one is
+      // gentle rather than an abrupt jump.
+      const FADE_WORDS = 5;
+      const b = paragraphWordBoundaries;
+      const paraWordCount = (() => {
+        if (!b?.length) return Infinity;
+        const end   = b[pIdx]               ?? b[b.length - 1] ?? 0;
+        const start = pIdx > 0 ? (b[pIdx - 1] ?? 0) : 0;
+        return end - start;
+      })();
+      const opacity = Number.isFinite(paraWordCount) && wIdx >= paraWordCount - FADE_WORDS
+        ? Math.max(0.1, (paraWordCount - wIdx) / FADE_WORDS)
+        : 1;
+
+      setParaOverlay({ pageIdx: page, paragraphIdx: pIdx, bbox: activeBbox, opacity });
     } else {
       // No bbox — clear overlay and use the reading-window fallback.
       setParaOverlay(null);
@@ -540,6 +555,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           border-radius: 3px;
           box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35);
           transition: background-color 0.07s ease;
+        }
+        @keyframes nasoma-bbox-fadein {
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
       `}</style>
 
@@ -610,19 +629,22 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                     const scale = w / pd.width;
                     return (
                       <div
+                        key={`${paraOverlay.pageIdx}-${paraOverlay.paragraphIdx}`}
                         style={{
                           position:      "absolute",
                           left:          bx0 * scale,
                           top:           by0 * scale,
                           width:         (bx1 - bx0) * scale,
                           height:        (by1 - by0) * scale,
-                          background:    "rgba(99, 102, 241, 0.25)",
-                          border:        "2px solid rgba(99, 102, 241, 0.8)",
-                          borderRadius:  "3px",
+                          background:    "rgba(99, 102, 241, 0.12)",
+                          border:        "1.5px solid rgba(99, 102, 241, 0.35)",
+                          borderRadius:  "6px",
+                          boxShadow:     "0 0 0 3px rgba(99, 102, 241, 0.08)",
                           pointerEvents: "none",
                           zIndex:        10,
-                          transition:    "top 0.15s ease, height 0.15s ease",
-                          outline:       "1px dashed red",  // DEBUG: remove after testing
+                          opacity:       paraOverlay.opacity,
+                          animation:     "nasoma-bbox-fadein 0.25s ease forwards",
+                          transition:    "opacity 0.15s ease",
                         }}
                       />
                     );
