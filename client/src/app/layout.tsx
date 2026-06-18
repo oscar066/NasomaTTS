@@ -60,12 +60,21 @@ export const metadata: Metadata = {
     siteName: "Me Nasoma",
     locale: "en_US",
     type: "website",
+    images: [
+      {
+        url: "https://me-nasoma.com/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Me Nasoma — Turn Any Document Into Audio",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Me Nasoma — Turn Any Document Into Audio",
     description: "Transform your documents into natural audio. Listen anywhere, anytime.",
     creator: "@menasoma",
+    images: ["https://me-nasoma.com/og-image.png"],
   },
   robots: {
     index: true,
