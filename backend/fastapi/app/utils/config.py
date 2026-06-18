@@ -28,7 +28,6 @@ class Settings(BaseSettings):
 
     # ── JWT authentication
     jwt_secret: str = "change-me"       # Must be overridden in production.
-    jwt_algorithm: str = "HS256"
     jwt_expire_hours: int = 24          # Token lifetime in hours.
 
     # ── Redis cache

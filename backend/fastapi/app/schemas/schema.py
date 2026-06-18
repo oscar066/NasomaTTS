@@ -1,38 +1,4 @@
-"""
-Pydantic request/response schemas.
-
-These models define the shape of data accepted by the API endpoints.  Pydantic
-validates incoming JSON against these schemas automatically and returns a
-structured 422 response when validation fails.
-"""
-
-from pydantic import BaseModel, EmailStr
-
-
-class UserCreate(BaseModel):
-    """Payload for ``POST /auth/signup``.
-
-    Attributes:
-        username: Unique display name chosen by the user.
-        email: Valid email address — validated by Pydantic's ``EmailStr``.
-        password: Plain-text password; hashed with bcrypt before storage.
-    """
-
-    username: str
-    email: EmailStr
-    password: str
-
-
-class UserSignIn(BaseModel):
-    """Payload for ``POST /auth/signin``.
-
-    Attributes:
-        email: The email address used at registration.
-        password: Plain-text password to verify against the stored hash.
-    """
-
-    email: str
-    password: str
+from pydantic import BaseModel
 
 
 class DocumentCreate(BaseModel):

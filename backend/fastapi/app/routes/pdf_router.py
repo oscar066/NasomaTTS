@@ -27,12 +27,12 @@ import uuid
 from urllib.parse import urlparse
 
 import fitz  # PyMuPDF
-from bson import ObjectId
+from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
 
 from ..utils.config import settings
-from ..db.database import get_db
+from ..models.document import NasomaDocument
 from ..utils.deps import get_current_user
 from ..services.storage import get_pdf_stream, upload_file, upload_pdf
 from ..utils.cache import cache_get, cache_set
@@ -195,7 +195,7 @@ async def upload_pdf_route(
     pdf_key: str | None = None
     thumbnail_key: str | None = None
     try:
-        base_path = f"{current_user['_id']}/{uuid.uuid4()}"
+        base_path = f"{current_user.id}/{uuid.uuid4()}"
         pdf_key, thumbnail_key = await asyncio.to_thread(
             _upload_to_minio_sync, content, thumbnail_bytes, base_path, pdf.filename
         )
@@ -223,38 +223,22 @@ async def upload_pdf_route(
 
 
 @router.get("/{doc_id}/thumbnail")
-async def serve_thumbnail(doc_id: str, db=Depends(get_db)):
-    """Return the pre-rendered first-page JPEG thumbnail for a document.
-
-    Returns a ``image/jpeg`` response suitable for use in ``<img>`` tags.
-    The thumbnail is cached by the browser using standard HTTP cache headers.
-
-    Args:
-        doc_id: MongoDB ObjectId of the document as a hex string.
-        db: Database handle from :func:`~app.db.database.get_db`.
-
-    Raises:
-        HTTPException 400: If ``doc_id`` is not a valid ObjectId.
-        HTTPException 404: If the document has no thumbnail stored.
-        HTTPException 502: If MinIO returns an error when fetching the thumbnail.
-    """
+async def serve_thumbnail(doc_id: str):
     try:
-        oid = ObjectId(doc_id)
+        oid = PydanticObjectId(doc_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid document ID")
 
-    # Cache the MinIO object key in Redis so repeat requests skip MongoDB.
-    # The thumbnail key is immutable after upload, so a long TTL is fine.
     redis_key = f"cache:thumb_key:{doc_id}"
     thumbnail_key = await cache_get(redis_key)
     if thumbnail_key is None:
-        doc = await db.documents.find_one({"_id": oid})
+        doc = await NasomaDocument.get(oid)
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
-        thumbnail_key = doc.get("thumbnail_url")
+        thumbnail_key = doc.thumbnail_url
         if not thumbnail_key:
             raise HTTPException(status_code=404, detail="No thumbnail stored for this document")
-        await cache_set(redis_key, thumbnail_key, 86400)  # 24 h — key never changes
+        await cache_set(redis_key, thumbnail_key, 86400)
 
     try:
         stream, size = get_pdf_stream(thumbnail_key)
@@ -275,35 +259,12 @@ async def serve_thumbnail(doc_id: str, db=Depends(get_db)):
 
 
 @router.get("/{doc_id}")
-async def serve_pdf(doc_id: str, request: Request, db=Depends(get_db)):
-    """Stream the stored PDF binary for a given document.
-
-    Looks up the MinIO object key from the document record and proxies the
-    binary back to the client as ``application/pdf``.  A ``Content-Disposition:
-    inline`` header lets browsers render the PDF natively rather than
-    downloading it.
-
-    Legacy documents stored a full presigned MinIO URL instead of an object
-    key.  These are normalised by extracting the path component on the fly.
-
-    Args:
-        doc_id: MongoDB ObjectId of the document as a hex string.
-        request: Incoming FastAPI request (used to check If-None-Match).
-        db: Database handle from :func:`~app.db.database.get_db`.
-
-    Raises:
-        HTTPException 400: If ``doc_id`` is not a valid ObjectId.
-        HTTPException 404: If the document doesn't exist or has no stored PDF.
-        HTTPException 422: If a legacy presigned URL cannot be resolved.
-        HTTPException 502: If MinIO returns an error when fetching the object.
-    """
+async def serve_pdf(doc_id: str, request: Request):
     try:
-        oid = ObjectId(doc_id)
+        oid = PydanticObjectId(doc_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid document ID")
 
-    # Cache the MinIO object key in Redis so repeat requests skip MongoDB.
-    # The pdf_key is immutable after upload so a 24-hour TTL is conservative.
     redis_key = f"cache:pdf_key:{doc_id}"
     cached_entry = await cache_get(redis_key)  # {"key": str, "title": str}
 
@@ -311,11 +272,11 @@ async def serve_pdf(doc_id: str, request: Request, db=Depends(get_db)):
         pdf_key = cached_entry["key"]
         safe_title = cached_entry["title"]
     else:
-        doc = await db.documents.find_one({"_id": oid})
+        doc = await NasomaDocument.get(oid)
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        pdf_key = doc.get("pdf_url")
+        pdf_key = doc.pdf_url
         if not pdf_key:
             raise HTTPException(status_code=404, detail="No PDF stored for this document")
 
@@ -328,8 +289,7 @@ async def serve_pdf(doc_id: str, request: Request, db=Depends(get_db)):
             else:
                 raise HTTPException(status_code=422, detail="Cannot resolve legacy PDF URL")
 
-        raw_title = doc.get("title", "document")
-        safe_title = raw_title.encode("latin-1", errors="replace").decode("latin-1")
+        safe_title = (doc.title or "document").encode("latin-1", errors="replace").decode("latin-1")
         await cache_set(redis_key, {"key": pdf_key, "title": safe_title}, 86400)
 
     # Use the MinIO object key as a stable ETag — it contains a UUID that is
