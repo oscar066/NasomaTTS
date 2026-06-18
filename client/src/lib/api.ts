@@ -57,6 +57,30 @@ export const authApi = {
       {},
       token
     ),
+
+  forgotPassword: (email: string) =>
+    request<null>("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (token: string, password: string) =>
+    request<null>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, password }),
+    }),
+
+  requestVerification: (email: string) =>
+    request<null>("/auth/request-verify-token", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  verifyEmail: (token: string) =>
+    request<{ id: string; email: string; is_verified: boolean }>(
+      "/auth/verify",
+      { method: "POST", body: JSON.stringify({ token }) }
+    ),
 };
 
 // ── Documents

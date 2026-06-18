@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     # ── Redis cache
     redis_url: str = "redis://localhost:6379"
 
+    # ── Email (Resend)
+    resend_api_key: str = ""
+    frontend_url: str = "http://localhost:3001"
+
     # ── MinIO object storage
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str = ""

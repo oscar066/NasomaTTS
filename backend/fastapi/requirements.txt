@@ -9,3 +9,4 @@ pydantic[email]==2.13.3
 colorama==0.4.6
 minio==7.2.15
 redis[asyncio]==5.2.1
+resend==2.10.0
