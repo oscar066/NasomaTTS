@@ -15,6 +15,8 @@ declare module "next-auth" {
     user: {
       id: string;
       email: string;
+      is_superuser: boolean;
+      plan: string;
     } & DefaultSession["user"];
   }
 }
@@ -56,9 +58,11 @@ export const authOptions = {
         try {
           const { access_token } = await authApi.googleAuth(account.id_token);
           const me = await authApi.me(access_token);
-          token.id          = me.id;
-          token.email       = me.email;
-          token.accessToken = access_token;
+          token.id           = me.id;
+          token.email        = me.email;
+          token.accessToken  = access_token;
+          token.is_superuser = me.is_superuser;
+          token.plan         = me.plan;
         } catch (err) {
           console.error("Google auth exchange failed:", err);
         }
@@ -67,13 +71,23 @@ export const authOptions = {
       if (user) {
         token.id    = user.id;
         token.email = user.email;
-        if (user.token) token.accessToken = user.token;
+        if (user.token) {
+          token.accessToken = user.token;
+          const me = await authApi.me(user.token as string);
+          token.is_superuser = me.is_superuser;
+          token.plan         = me.plan;
+        }
       }
       return token;
     },
     async session({ session, token }: { session: Session; token: JWT }) {
       if (token) {
-        session.user        = { id: token.id as string, email: token.email as string };
+        session.user = {
+          id:           token.id as string,
+          email:        token.email as string,
+          is_superuser: (token.is_superuser as boolean) ?? false,
+          plan:         (token.plan as string) ?? "free",
+        };
         session.accessToken = token.accessToken as string;
       }
       return session;

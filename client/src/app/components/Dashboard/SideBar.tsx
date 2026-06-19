@@ -9,11 +9,14 @@ import {
   HelpCircle,
   Loader2,
   Zap,
+  Crown,
+  ShieldCheck,
 } from "lucide-react";
 import NasomaLogo from "../Logo/nasoma-logo";
 import { useDocumentUpload } from "@/hooks/useDocumentUpload";
 import { toast } from "sonner";
 import { useRouter, usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 interface NavItem {
   icon: React.ElementType;
@@ -40,6 +43,9 @@ export default function Sidebar({ isOpen }: SidebarProps) {
   const { uploadDocument, isLoading } = useDocumentUpload();
   const router = useRouter();
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const isSuperuser = session?.user?.is_superuser ?? false;
+  const isPro       = session?.user?.plan === "pro";
 
   const handleUploadClick = () => fileInputRef.current?.click();
 
@@ -112,6 +118,29 @@ export default function Sidebar({ isOpen }: SidebarProps) {
           );
         })}
 
+        {/* Admin link — superusers only */}
+        {isSuperuser && (
+          <>
+            {isOpen && (
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-2 mt-3 mb-1">
+                Admin
+              </p>
+            )}
+            <button
+              onClick={() => router.push("/admin")}
+              title={!isOpen ? "Admin" : undefined}
+              className={`
+                flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium transition-colors w-full text-left
+                ${pathname.startsWith("/admin") ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}
+                ${!isOpen ? "justify-center" : ""}
+              `}
+            >
+              <ShieldCheck className="h-4 w-4 flex-shrink-0" />
+              {isOpen && <span>Admin Dashboard</span>}
+            </button>
+          </>
+        )}
+
         {/* Upload */}
         <input
           type="file"
@@ -142,26 +171,46 @@ export default function Sidebar({ isOpen }: SidebarProps) {
 
       {/* Bottom section */}
       <div className="p-3 border-t border-border space-y-1">
-        {isOpen ? (
-          <div className="bg-primary/5 border border-primary/10 rounded-lg p-3 mb-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Zap className="h-3.5 w-3.5 text-primary" />
-              <span className="text-xs font-semibold text-primary">Free Plan</span>
+        {isPro ? (
+          /* Pro badge */
+          isOpen ? (
+            <div className="bg-gradient-to-r from-primary/10 to-purple-500/10 border border-primary/20 rounded-lg p-3 mb-3">
+              <div className="flex items-center gap-2">
+                <Crown className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                <span className="text-xs font-semibold text-primary">Pro Plan</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                You have full access to all Pro features.
+              </p>
             </div>
-            <p className="text-[11px] text-muted-foreground mb-2">
-              Upgrade for more voices &amp; unlimited documents.
-            </p>
-            <button className="w-full text-xs font-semibold bg-gradient-to-r from-primary to-purple-600 text-white py-1.5 rounded-md hover:opacity-90 transition-opacity">
-              Upgrade
-            </button>
-          </div>
+          ) : (
+            <div className="flex justify-center w-full py-2" title="Pro Plan">
+              <Crown className="h-4 w-4 text-primary" />
+            </div>
+          )
         ) : (
-          <button
-            className="flex justify-center w-full py-2 text-muted-foreground hover:text-primary transition-colors"
-            title="Upgrade"
-          >
-            <Zap className="h-4 w-4" />
-          </button>
+          /* Free — upgrade banner */
+          isOpen ? (
+            <div className="bg-primary/5 border border-primary/10 rounded-lg p-3 mb-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Zap className="h-3.5 w-3.5 text-primary" />
+                <span className="text-xs font-semibold text-primary">Free Plan</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mb-2">
+                Upgrade for more voices &amp; unlimited documents.
+              </p>
+              <button className="w-full text-xs font-semibold bg-gradient-to-r from-primary to-purple-600 text-white py-1.5 rounded-md hover:opacity-90 transition-opacity">
+                Upgrade
+              </button>
+            </div>
+          ) : (
+            <button
+              className="flex justify-center w-full py-2 text-muted-foreground hover:text-primary transition-colors"
+              title="Upgrade to Pro"
+            >
+              <Zap className="h-4 w-4" />
+            </button>
+          )
         )}
 
         {bottomNavItems.map(({ icon: Icon, label, href }) => (
