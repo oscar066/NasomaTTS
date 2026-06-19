@@ -12,6 +12,8 @@ class User(BeanieBaseUser, Document):
     avatar: str = ""
     plan: str = "free"
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    pref_voice: Optional[str] = None
+    pref_speed: Optional[float] = None
 
     class Settings(BeanieBaseUser.Settings):
         name = "users"
@@ -21,6 +23,8 @@ class UserRead(schemas.BaseUser[PydanticObjectId]):
     username: str
     avatar: str
     plan: str
+    pref_voice: Optional[str] = None
+    pref_speed: Optional[float] = None
 
 
 class UserCreate(schemas.BaseUserCreate):
@@ -30,3 +34,5 @@ class UserCreate(schemas.BaseUserCreate):
 class UserUpdate(schemas.BaseUserUpdate):
     username: Optional[str] = None
     avatar: Optional[str] = None
+    pref_voice: Optional[str] = None
+    pref_speed: Optional[float] = None

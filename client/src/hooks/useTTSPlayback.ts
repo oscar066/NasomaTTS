@@ -21,6 +21,9 @@
 import { useState, useRef, useEffect } from "react";
 import { speakStream, documentsApi, StoredPage } from "@/lib/api";
 import { saveLocalProgress } from "@/lib/progress";
+import { useDocumentsStore } from "@/store/documents";
+import { prefs } from "@/lib/preferences";
+import { preferencesApi } from "@/lib/api";
 
 // ── Public types
 
@@ -65,7 +68,7 @@ export interface TTSPlaybackResult {
 
 export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
   const [state, setState] = useState<PlaybackState>({
-    speed: 1,
+    speed: prefs.getSpeed(),
     isPlaying: false,
     currentParagraphIndex: -1,
     currentWordIndex: -1,
@@ -128,6 +131,7 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     const { docId, token } = depsRef.current;
     if (!docId) return;
     saveLocalProgress(docId, page);
+    useDocumentsStore.getState().updateDocument(docId, { current_page: page });
     if (token) {
       documentsApi.saveProgress(docId, page, token).catch(() => {});
     }
@@ -445,6 +449,11 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     handlePlay,
     handleStop,
     skipToParagraph,
-    setSpeed: (speed: number) => update({ speed }),
+    setSpeed: (speed: number) => {
+      prefs.setSpeed(speed);
+      update({ speed });
+      const { token } = depsRef.current;
+      if (token) preferencesApi.save(null, speed, token).catch(() => {});
+    },
   };
 };

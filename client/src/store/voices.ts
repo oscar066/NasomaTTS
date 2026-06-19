@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { Voice } from "@/lib/api";
+import { prefs } from "@/lib/preferences";
 
 interface VoicesStore {
   voices: Voice[];
@@ -17,8 +18,15 @@ export const useVoicesStore = create<VoicesStore>((set) => ({
   ttsAvailable: false,
   fetched: false,
 
-  setVoices: (voices, ttsAvailable) =>
-    set({ voices, ttsAvailable, voice: voices[0]?.id ?? "", fetched: true }),
+  setVoices: (voices, ttsAvailable) => {
+    const saved   = prefs.getVoice();
+    const matched = saved ? voices.find((v) => v.id === saved) : null;
+    const voice   = matched ? matched.id : (voices[0]?.id ?? "");
+    set({ voices, ttsAvailable, voice, fetched: true });
+  },
 
-  setVoice: (voice) => set({ voice }),
+  setVoice: (voice) => {
+    prefs.setVoice(voice);
+    set({ voice });
+  },
 }));
