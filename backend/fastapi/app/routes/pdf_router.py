@@ -43,7 +43,7 @@ router = APIRouter(prefix="/pdf", tags=["pdf"])
 
 # Maximum accepted PDF size.  Larger files are rejected before any processing
 # to protect server memory and storage quotas.
-MAX_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_SIZE = 50 * 1024 * 1024  # 50 MB
 
 # Thumbnail render resolution.  72 DPI × scale 3 ≈ 216 DPI — sharp on retina
 # displays while keeping file size small (typically 40–120 KB per page).
