@@ -5,7 +5,7 @@ import FadeIn from "@/app/components/ui/FadeIn";
 const testimonials = [
   {
     quote:
-      "Me Nasoma has completely changed how I consume content. I catch up on research papers during my morning run — something I never thought possible.",
+      "Me Nasoma has completely changed how I consume content. I catch up on research papers during my morning run, something I never thought possible.",
     author: "Sarah Johnson",
     role: "Content Creator",
     company: "TechTalk Podcast",
@@ -25,7 +25,7 @@ const testimonials = [
   },
   {
     quote:
-      "The multilingual support is incredible. I switch between English and Spanish papers seamlessly — the voices sound completely natural.",
+      "The multilingual support is incredible. I switch between English and Spanish papers seamlessly. The voices sound completely natural.",
     author: "Emma Rodriguez",
     role: "Research Scientist",
     company: "GlobalTech Solutions",
@@ -55,7 +55,7 @@ export default function TestimonialsSection() {
           <span className="inline-block text-xs font-semibold tracking-widest uppercase text-primary mb-4 bg-primary/10 px-3 py-1.5 rounded-full">
             Testimonials
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+          <h2 className="text-2xl md:text-3xl font-bold mb-4">
             Loved by{" "}
             <span className="bg-gradient-to-r from-primary via-violet-500 to-purple-600 bg-clip-text text-transparent">
               Readers
