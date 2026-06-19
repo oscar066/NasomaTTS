@@ -56,7 +56,7 @@ export default function ForgotPasswordPage() {
             Forgot your<br />password?
           </h2>
           <p className="text-white/80 mb-8 leading-relaxed">
-            No worries — it happens to everyone. Enter your email and
+            No worries, it happens to everyone. Enter your email and
             we&apos;ll send you a secure link to get back in.
           </p>
           <ul className="space-y-4">
@@ -74,9 +74,9 @@ export default function ForgotPasswordPage() {
         {/* Bottom quote */}
         <div className="relative z-10 border-t border-white/20 pt-6">
           <p className="text-sm text-white/70 italic">
-            &ldquo;Getting back in was seamless — reset link arrived in seconds.&rdquo;
+            &ldquo;Getting back in was seamless. Reset link arrived in seconds.&rdquo;
           </p>
-          <p className="text-xs text-white/50 mt-1">— James K., Student</p>
+          <p className="text-xs text-white/50 mt-1">James K., Student</p>
         </div>
       </div>
 
