@@ -12,6 +12,7 @@ class NasomaDocument(Document):
     thumbnail_url: Optional[str] = None
     pages: Optional[list] = None
     current_page: int = 0
+    reading_status: Optional[str] = None
     author: PydanticObjectId
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

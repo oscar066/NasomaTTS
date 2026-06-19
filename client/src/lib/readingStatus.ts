@@ -5,15 +5,45 @@ export type ReadingStatus = "want_to_read" | "reading" | "finished" | "read_late
 export interface StatusMeta {
   label: string;
   icon: LucideIcon;
-  color: string; // tailwind text color
-  bg: string;    // tailwind bg color
+  color: string;
+  bg: string;
+  border: string;
+  glow: string;
 }
 
 export const STATUS_META: Record<ReadingStatus, StatusMeta> = {
-  want_to_read: { label: "Want to Read",       icon: Bookmark,     color: "text-blue-500",   bg: "bg-blue-500/15"   },
-  reading:      { label: "Currently Reading",  icon: BookOpen,     color: "text-amber-500",  bg: "bg-amber-500/15"  },
-  finished:     { label: "Finished",           icon: CheckCircle2, color: "text-green-500",  bg: "bg-green-500/15"  },
-  read_later:   { label: "Read Later",         icon: Clock,        color: "text-purple-500", bg: "bg-purple-500/15" },
+  want_to_read: {
+    label:  "Want to Read",
+    icon:   Bookmark,
+    color:  "text-blue-500",
+    bg:     "bg-blue-500/15",
+    border: "border border-blue-500/40",
+    glow:   "shadow-[0_0_10px_rgba(59,130,246,0.45)]",
+  },
+  reading: {
+    label:  "Currently Reading",
+    icon:   BookOpen,
+    color:  "text-amber-500",
+    bg:     "bg-amber-500/15",
+    border: "border border-amber-500/40",
+    glow:   "shadow-[0_0_10px_rgba(245,158,11,0.45)]",
+  },
+  finished: {
+    label:  "Finished",
+    icon:   CheckCircle2,
+    color:  "text-green-500",
+    bg:     "bg-green-500/15",
+    border: "border border-green-500/40",
+    glow:   "shadow-[0_0_10px_rgba(34,197,94,0.45)]",
+  },
+  read_later: {
+    label:  "Read Later",
+    icon:   Clock,
+    color:  "text-purple-500",
+    bg:     "bg-purple-500/15",
+    border: "border border-purple-500/40",
+    glow:   "shadow-[0_0_10px_rgba(168,85,247,0.45)]",
+  },
 };
 
 export const STATUSES = Object.keys(STATUS_META) as ReadingStatus[];

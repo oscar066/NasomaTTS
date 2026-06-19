@@ -194,6 +194,7 @@ export interface Document {
   pages?: StoredPage[] | null;
   /** Last page the user reached (0-based). Set to pages.length for 100 %. */
   current_page?: number;
+  reading_status?: string | null;
   author: { id: string; username: string; email: string };
   createdAt: string;
   updatedAt: string;
@@ -239,6 +240,13 @@ export const documentsApi = {
       { method: "PATCH", body: JSON.stringify({ current_page: currentPage }) },
       token
     ),
+
+  setStatus: (id: string, status: string | null, token: string) =>
+    request<{ success: boolean; reading_status: string | null }>(
+      `/documents/${id}/status`,
+      { method: "PATCH", body: JSON.stringify({ reading_status: status }) },
+      token
+    ),
 };
 
 // ── PDF
@@ -265,6 +273,19 @@ export interface Voice {
 export const voicesApi = {
   list: () =>
     request<{ voices: Voice[]; tts_available: boolean }>("/voices"),
+};
+
+// ── User preferences
+
+export const preferencesApi = {
+  save: (voice: string | null, speed: number | null, token: string) =>
+    request<void>(
+      "/users/me",
+      { method: "PATCH", body: JSON.stringify({ pref_voice: voice, pref_speed: speed }) },
+      token
+    ),
+  load: (token: string) =>
+    request<{ pref_voice: string | null; pref_speed: number | null }>("/users/me", {}, token),
 };
 
 // ── PDF proxy 

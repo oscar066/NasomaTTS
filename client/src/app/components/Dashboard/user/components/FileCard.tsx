@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FileText, Play, MoreHorizontal, Trash2, Pencil, Share2, Calendar, Check, X } from "lucide-react";
+import { FileText, Play, MoreHorizontal, Trash2, Pencil, Share2, Calendar, Check, X, Tag } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,10 +15,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { documentsApi, thumbnailProxyUrl, type Document } from "@/lib/api";
-import { getStatus, setStatus, type ReadingStatus } from "@/lib/readingStatus";
+import { getStatus, setStatus, type ReadingStatus, STATUS_META, STATUSES } from "@/lib/readingStatus";
+import { useDocumentsStore } from "@/store/documents";
 import { ProgressRing } from "./ProgressRing";
-import { StatusBadge } from "./StatusBadge";
-import { ReadingStatusMenu } from "./ReadingStatusMenu";
 
 interface FileCardProps {
   file: Document;
@@ -29,13 +28,18 @@ interface FileCardProps {
 export function FileCard({ file, onDelete, onRename }: FileCardProps) {
   const router = useRouter();
   const { data: session } = useSession();
+  const { updateDocument } = useDocumentsStore();
 
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [thumbError, setThumbError]       = useState(false);
   const [isRenaming, setIsRenaming]       = useState(false);
   const [renameValue, setRenameValue]     = useState(file.title);
   const [renameLoading, setRenameLoading] = useState(false);
-  const [status, setStatusState]          = useState<ReadingStatus | null>(() => getStatus(file.id));
+  const [status, setStatusState]          = useState<ReadingStatus | null>(() => {
+    // Server value takes precedence; fall back to localStorage for offline/legacy data.
+    if (file.reading_status) return file.reading_status as ReadingStatus;
+    return getStatus(file.id);
+  });
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const hasThumbnail = !!file.thumbnail_url && !thumbError;
@@ -45,8 +49,11 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
     : 0;
 
   const handleStatusChange = (s: ReadingStatus | null) => {
-    setStatus(file.id, s);
+    setStatus(file.id, s);   // keep localStorage in sync
     setStatusState(s);
+    updateDocument(file.id, { reading_status: s });
+    const token = session?.accessToken;
+    if (token) documentsApi.setStatus(file.id, s, token).catch(() => {});
   };
 
   const startRename = (e: React.MouseEvent) => {
@@ -144,7 +151,6 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
           </div>
         )}
 
-        {status && <StatusBadge status={status} />}
 
         <div className="absolute top-2 right-2">
           <DropdownMenu>
@@ -162,7 +168,6 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
               <DropdownMenuItem onClick={startRename}>
                 <Pencil className="h-3.5 w-3.5 mr-2" /> Rename
               </DropdownMenuItem>
-              <ReadingStatusMenu status={status} onChange={handleStatusChange} />
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toast.info("Coming soon", { description: "Sharing is not yet available." }); }}>
                 <Share2 className="h-3.5 w-3.5 mr-2" /> Share
               </DropdownMenuItem>
@@ -198,6 +203,57 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
         ) : (
           <span className="font-semibold text-sm leading-snug line-clamp-2 min-h-[2.5rem]">{file.title}</span>
         )}
+
+        {/* Status pill — always visible in card body, directly clickable */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              onClick={(e) => e.stopPropagation()}
+              className={`flex items-center gap-1.5 self-start px-2 py-0.5 rounded-full text-[10px] font-medium transition-all ${
+                status
+                  ? `${STATUS_META[status].bg} ${STATUS_META[status].color} ${STATUS_META[status].border} ${STATUS_META[status].glow} hover:opacity-80`
+                  : "bg-muted text-muted-foreground border border-border hover:bg-muted/80"
+              }`}
+            >
+              {status ? (
+                <>
+                  {(() => { const Icon = STATUS_META[status].icon; return <Icon className="h-3 w-3" />; })()}
+                  {STATUS_META[status].label}
+                </>
+              ) : (
+                <>
+                  <Tag className="h-3 w-3" />
+                  Set status
+                </>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
+            {STATUSES.map((s) => {
+              const meta = STATUS_META[s];
+              return (
+                <DropdownMenuItem
+                  key={s}
+                  onClick={(e) => { e.stopPropagation(); handleStatusChange(s); }}
+                  className={status === s ? "font-semibold" : ""}
+                >
+                  <meta.icon className={`h-3.5 w-3.5 mr-2 ${meta.color}`} />
+                  {meta.label}
+                  {status === s && <Check className="h-3 w-3 ml-auto" />}
+                </DropdownMenuItem>
+              );
+            })}
+            {status && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleStatusChange(null); }}>
+                  <X className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                  Clear status
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <div className="flex items-center gap-2">
           <ProgressRing percent={progress} />

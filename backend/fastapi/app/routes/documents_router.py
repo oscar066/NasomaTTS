@@ -7,7 +7,7 @@ from ..utils.cache import TTL_DOC_LIST, TTL_DOCUMENT, cache_del, cache_get, cach
 from ..models.document import NasomaDocument
 from ..models.user import User
 from ..utils.deps import get_current_user
-from ..schemas.schema import DocumentCreate, DocumentRename, ProgressUpdate
+from ..schemas.schema import DocumentCreate, DocumentRename, ProgressUpdate, StatusUpdate
 from ..utils.logger import setup_logger
 
 logger = setup_logger("nasoma.routes.documents")
@@ -27,6 +27,7 @@ def _fmt_doc(doc: NasomaDocument, author: dict) -> dict:
         "thumbnail_url": doc.thumbnail_url,
         "pages": doc.pages,
         "current_page": doc.current_page,
+        "reading_status": doc.reading_status,
         "author": author,
         "createdAt": doc.created_at,
         "updatedAt": doc.updated_at,
@@ -178,3 +179,21 @@ async def update_progress(doc_id: str, data: ProgressUpdate, current_user: User 
     await cache_del(f"cache:docs:user:{str(current_user.id)}")
     logger.debug("Progress saved: doc=%s page=%d user=%s", doc_id, data.current_page, current_user.id)
     return {"success": True, "current_page": data.current_page}
+
+
+@router.patch("/{doc_id}/status")
+async def update_status(doc_id: str, data: StatusUpdate, current_user: User = Depends(get_current_user)):
+    try:
+        oid = PydanticObjectId(doc_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid document ID")
+
+    doc = await NasomaDocument.get(oid)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc.author != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this document")
+
+    await doc.set({NasomaDocument.reading_status: data.reading_status, NasomaDocument.updated_at: datetime.utcnow()})
+    await cache_del(f"cache:docs:user:{str(current_user.id)}")
+    return {"success": True, "reading_status": data.reading_status}
