@@ -2,7 +2,7 @@ import hashlib
 import secrets
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi_users import exceptions
 from fastapi_users.password import PasswordHelper
 from pydantic import BaseModel
@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from ..auth.setup import auth_backend, fastapi_users, get_jwt_strategy, get_user_manager
 from ..models.user import User, UserCreate, UserRead, UserUpdate
 from ..auth.setup import UserManager
+from ..utils.rate_limit import limiter
 
 router = APIRouter()
 
@@ -45,7 +46,9 @@ class GoogleAuthBody(BaseModel):
 
 
 @router.post("/auth/google", tags=["auth"])
+@limiter.limit("10/minute")
 async def google_auth(
+    request: Request,
     body: GoogleAuthBody,
     user_manager: UserManager = Depends(get_user_manager),
 ):

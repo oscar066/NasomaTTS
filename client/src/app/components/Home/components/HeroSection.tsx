@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Play, BookOpen, Pause, SkipBack, SkipForward, Headphones } from "lucide-react";
+import { Play, BookOpen, Pause, SkipBack, SkipForward, Headphones, MessageSquare, FileText, HelpCircle, History } from "lucide-react";
 import Link from "next/link";
 
 export default function HeroSection() {
@@ -44,29 +44,28 @@ export default function HeroSection() {
                 style={{ animationDelay: "0.1s" }}
               >
                 <Headphones className="h-3.5 w-3.5" />
-                <span>Your content, your voice</span>
+                <span>Read more. Retain more.</span>
               </div>
 
               {/* Headline */}
               <h1
-                className="opacity-0 animate-fade-up text-3xl sm:text-4xl md:text-5xl font-bold mb-6 leading-[1.1] tracking-tight"
+                className="opacity-0 animate-fade-up text-2xl sm:text-3xl md:text-4xl font-bold mb-6 leading-[1.1] tracking-tight"
                 style={{ animationDelay: "0.25s" }}
               >
-                <span className="text-foreground">Turn Reading Into</span>
+                <span className="text-foreground">Read Deeper,</span>
                 <br />
                 <span className="bg-gradient-to-r from-primary via-violet-500 to-purple-600 bg-clip-text text-transparent">
-                  Listening Freedom
+                  Understand More
                 </span>
               </h1>
 
               {/* Body */}
               <p
-                className="opacity-0 animate-fade-up text-base md:text-lg mb-10 text-muted-foreground leading-relaxed max-w-lg"
+                className="opacity-0 animate-fade-up text-sm md:text-base mb-10 text-muted-foreground leading-relaxed max-w-lg"
                 style={{ animationDelay: "0.4s" }}
               >
-                Me Nasoma transforms any PDF or document into natural, engaging audio
-                that fits your life. Listen while you commute, exercise, or relax
-                — saving time and reducing eye strain.
+                Audio and visual highlighting in sync, so you stay focused,
+                absorb more, and get through far more of what matters.
               </p>
 
               {/* Buttons */}
@@ -115,7 +114,7 @@ export default function HeroSection() {
                   ))}
                 </div>
                 <div>
-                  <span className="font-semibold text-foreground">12,000+</span>{" "}
+                  <span className="font-semibold text-foreground">120+</span>{" "}
                   readers worldwide
                   <span className="ml-2 text-amber-500 font-medium">★★★★★</span>
                 </div>
@@ -144,57 +143,94 @@ export default function HeroSection() {
                       <div className="w-3 h-3 rounded-full bg-green-400/80" />
                     </div>
                     <span className="text-xs text-muted-foreground flex-1 text-center truncate pr-8 font-medium">
-                      The Great Office Chair Heist.pdf
+                      Pride and Prejudice — Jane Austen.pdf
                     </span>
                   </div>
 
                   {/* Document content */}
-                  <div className="p-6 space-y-3 max-h-52 overflow-hidden">
-                    <h4 className="font-bold text-sm text-foreground">The Great Office Chair Heist</h4>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      It all started with an innocent desire for comfort. Ethan, a junior
-                      developer at TechNova Inc.,{" "}
-                      <span className="bg-primary/20 text-foreground rounded px-0.5 py-0.5">
-                        had been suffering in silence—or rather, suffering in squeaky discomfort.
+                  <div className="px-6 pt-4 pb-3">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[10px] font-bold tracking-widest uppercase text-foreground/70">Chapter I</span>
+                      <span className="text-[10px] text-foreground/60">pg. 1 of 432</span>
+                    </div>
+
+                    <p className="text-xs text-foreground/70 leading-[1.85]">
+                      <span className="bg-primary/20 rounded-sm px-0.5">
+                        It is a truth universally acknowledged, that a single man in possession
+                        of a good fortune,{" "}
+                        <span className="bg-primary/30 text-foreground font-medium rounded-sm px-0.5 ring-1 ring-primary/30">
+                          must be in want of a wife.
+                        </span>
                       </span>{" "}
-                      His office chair was a relic from a bygone era, a testament to the
-                      company&apos;s frugality.
+                      However little known the feelings or views of such a man may be on his
+                      first entering a neighbourhood, this truth is so well fixed in the minds
+                      of the surrounding families.
                     </p>
-                    <p className="text-xs text-muted-foreground leading-relaxed opacity-50">
-                      Meanwhile, across the room, the company&apos;s senior developer, Greg, sat
-                      like a king on a plush, ergonomic throne. It had lumbar support, adjustable
-                      arms, and most importantly: wheels that actually worked...
+
+                    <p className="mt-3 text-xs text-muted-foreground/80 leading-[1.85]">
+                      &ldquo;My dear Mr. Bennet,&rdquo; said his lady to him one day, &ldquo;have you
+                      heard that Netherfield Park is let at last?&rdquo; Mr. Bennet replied
+                      that he had not. &ldquo;But it is,&rdquo; returned she; &ldquo;for Mrs. Long has
+                      just been here, and she told me all about it.&rdquo;
                     </p>
                   </div>
 
+                  {/* AI actions tease */}
+                  <div className="px-6 pb-3 flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground/50 font-medium mr-1">AI</span>
+                    {[
+                      { icon: MessageSquare, label: "Chat" },
+                      { icon: FileText,      label: "Summary" },
+                      { icon: HelpCircle,    label: "Quiz" },
+                      { icon: History,       label: "Recap" },
+                    ].map(({ icon: Icon, label }) => (
+                      <div
+                        key={label}
+                        title={label}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/6 border border-primary/10 text-primary/50"
+                      >
+                        <Icon className="h-3 w-3" />
+                        <span className="text-[10px] font-medium">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+
                   {/* Playback bar */}
-                  <div className="border-t border-border bg-secondary/20 px-5 py-4">
-                    <div className="flex items-center justify-between mb-2.5">
-                      <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-semibold">
+                  <div className="border-t border-border bg-secondary/20 px-5 py-3.5">
+
+                    {/* Voice + waveform + time */}
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-semibold shrink-0">
                         Karen · EN-AU
                       </span>
-                      <span className="text-xs font-mono text-primary font-medium">1:24 / 8:30</span>
+                      <div className="flex items-center gap-px flex-1 h-4">
+                        {[4,7,11,5,9,13,7,4,10,6,12,8,5,9,11,6].map((h, i) => (
+                          <div
+                            key={i}
+                            className="w-0.5 bg-primary/60 rounded-full origin-bottom animate-wave-bar"
+                            style={{ height: `${h}px`, animationDelay: `${i * 0.07}s` }}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-[10px] font-mono text-primary font-medium shrink-0">1:24 / 8:30</span>
                     </div>
 
-                    {/* Progress bar — animates from 0 → 17% on load */}
-                    <div className="h-1.5 bg-secondary rounded-full mb-4 cursor-pointer">
+                    {/* Progress bar */}
+                    <div className="h-1.5 bg-secondary rounded-full mb-3 cursor-pointer">
                       <div className="h-1.5 bg-gradient-to-r from-primary to-purple-500 rounded-full w-0 animate-progress-fill" />
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <button className="w-8 h-8 rounded-full bg-secondary/80 flex items-center justify-center hover:bg-secondary transition-colors">
-                          <SkipBack className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
-                        {/* Pulse-ring play button */}
-                        <button className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center animate-pulse-ring hover:scale-105 transition-transform">
-                          <Pause className="h-4 w-4 text-white" />
-                        </button>
-                        <button className="w-8 h-8 rounded-full bg-secondary/80 flex items-center justify-center hover:bg-secondary transition-colors">
-                          <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
-                      </div>
-                      <span className="text-xs bg-secondary text-foreground px-2.5 py-1 rounded-full font-semibold">
+                    <div className="flex items-center justify-center gap-2">
+                      <button className="w-8 h-8 rounded-full bg-secondary/80 flex items-center justify-center hover:bg-secondary transition-colors">
+                        <SkipBack className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                      <button className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center animate-pulse-ring hover:scale-105 transition-transform">
+                        <Pause className="h-4 w-4 text-white" />
+                      </button>
+                      <button className="w-8 h-8 rounded-full bg-secondary/80 flex items-center justify-center hover:bg-secondary transition-colors">
+                        <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                      <span className="text-xs bg-secondary text-foreground px-2.5 py-1 rounded-full font-semibold ml-2">
                         1.2×
                       </span>
                     </div>
@@ -220,10 +256,10 @@ export default function HeroSection() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-border/60">
             {[
-              { value: "12,000+", label: "Active Readers" },
-              { value: "40+",     label: "Natural Voices" },
-              { value: "100+",    label: "Languages" },
-              { value: "4.9 ★",  label: "Average Rating" },
+              { value: "120+",  label: "Active Readers" },
+              { value: "3×",    label: "More Reading" },
+              { value: "100+",  label: "Languages" },
+              { value: "4.9 ★", label: "Average Rating" },
             ].map((stat, i) => (
               <div
                 key={i}

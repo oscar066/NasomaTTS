@@ -1,4 +1,4 @@
-import { Upload, Cpu, Headphones } from "lucide-react";
+import { Upload, Cpu, BookOpen } from "lucide-react";
 import FadeIn from "@/app/components/ui/FadeIn";
 
 const steps = [
@@ -7,23 +7,23 @@ const steps = [
     icon: Upload,
     title: "Upload Your Document",
     description:
-      "Import any PDF, article, or text file. Me Nasoma accepts all major document formats in seconds.",
+      "Import any PDF, article, or text file. Structure, headings, and all, parsed in seconds.",
     accent: "from-primary to-indigo-600",
   },
   {
     step: "02",
     icon: Cpu,
-    title: "AI Narrates It",
+    title: "AI Reads With You",
     description:
-      "Our text-to-speech engine processes your content and renders it in a natural, lifelike voice of your choice.",
+      "A lifelike voice narrates while each sentence highlights in real time. Eyes and ears, in sync.",
     accent: "from-violet-500 to-purple-600",
   },
   {
     step: "03",
-    icon: Headphones,
-    title: "Listen Anywhere",
+    icon: BookOpen,
+    title: "Concentrate, Comprehend, Cover More",
     description:
-      "Stream instantly in the browser or download the audio. Your library is always with you.",
+      "Stay focused, absorb deeply, and actually get through your reading list.",
     accent: "from-purple-600 to-pink-600",
   },
 ];
@@ -38,14 +38,14 @@ export default function HowItWorksSection() {
           <span className="inline-block text-xs font-semibold tracking-widest uppercase text-primary mb-4 bg-primary/10 px-3 py-1.5 rounded-full">
             How It Works
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Three{" "}
+          <h2 className="text-2xl md:text-3xl font-bold mb-4">
+            How Me Nasoma{" "}
             <span className="bg-gradient-to-r from-primary via-violet-500 to-purple-600 bg-clip-text text-transparent">
-              Simple Steps
+              Works
             </span>
           </h2>
           <p className="text-base text-muted-foreground">
-            From document to audio in three simple steps.
+            From document to deep understanding in three steps.
           </p>
         </FadeIn>
 

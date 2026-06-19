@@ -6,9 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, UserPlus, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Loader2, UserPlus, AlertCircle, Sparkles, Brain, Bot, Globe } from "lucide-react";
 import Link from "next/link";
-import { FaGoogle } from "react-icons/fa";
 import NasomaLogo from "@/app/components/Logo/nasoma-logo";
 import { BsEyeFill, BsEyeSlashFill } from "react-icons/bs";
 import { useRouter } from "next/navigation";
@@ -16,10 +15,10 @@ import { signIn, useSession } from "next-auth/react";
 import { authApi } from "@/lib/api";
 
 const perks = [
-  "Free forever on the starter plan",
-  "No credit card required",
-  "40+ voices across 100+ languages",
-  "Your documents, always in sync",
+  { icon: Sparkles, text: "Free to start, no credit card needed" },
+  { icon: Brain,    text: "AI that reads and understands with you" },
+  { icon: Bot,      text: "Chat, Summary, Quiz and Recap tools" },
+  { icon: Globe,    text: "40+ voices across 100+ languages" },
 ];
 
 export default function SignupPage() {
@@ -108,17 +107,19 @@ export default function SignupPage() {
         {/* Center content */}
         <div className="relative z-10">
           <h2 className="text-3xl font-bold mb-4 leading-snug">
-            Start listening<br />in seconds.
+            Read more.<br />Retain what matters.
           </h2>
           <p className="text-white/80 mb-8 leading-relaxed">
-            Create your free account and transform how you consume
-            documents, articles, and books.
+            Join readers who concentrate better, understand more,
+            and actually get through their reading list.
           </p>
-          <ul className="space-y-3">
-            {perks.map((perk) => (
-              <li key={perk} className="flex items-center gap-3 text-sm text-white/90">
-                <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-300" />
-                {perk}
+          <ul className="space-y-4">
+            {perks.map(({ icon: Icon, text }) => (
+              <li key={text} className="flex items-center gap-3 text-sm text-white/90">
+                <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center flex-shrink-0">
+                  <Icon className="h-4 w-4" />
+                </div>
+                {text}
               </li>
             ))}
           </ul>
@@ -127,9 +128,9 @@ export default function SignupPage() {
         {/* Bottom quote */}
         <div className="relative z-10 border-t border-white/20 pt-6">
           <p className="text-sm text-white/70 italic">
-            &ldquo;The multilingual support is incredible — completely natural voices.&rdquo;
+            &ldquo;I read three times more since I started using Me Nasoma. The focus is real.&rdquo;
           </p>
-          <p className="text-xs text-white/50 mt-1">— Emma R., Research Scientist</p>
+          <p className="text-xs text-white/50 mt-1">Emma R., Research Scientist</p>
         </div>
       </div>
 
@@ -147,7 +148,7 @@ export default function SignupPage() {
             <h1 className="text-2xl font-extrabold mb-1 bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-700 bg-clip-text text-transparent">
               Create your account
             </h1>
-            <p className="text-sm text-muted-foreground">Free forever — no credit card needed</p>
+            <p className="text-sm text-muted-foreground">Your reading journey starts here.</p>
           </div>
 
           {/* Error alert */}
@@ -285,20 +286,24 @@ export default function SignupPage() {
             </div>
           </div>
 
-          <Button
-            variant="outline"
+          <button
             type="button"
             disabled={isLoading}
-            className="w-full"
             onClick={() => signIn("google")}
+            className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-lg border border-border bg-white hover:bg-gray-50 text-gray-700 font-medium text-sm shadow-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
             ) : (
-              <FaGoogle className="mr-2 h-4 w-4" />
+              <svg viewBox="0 0 24 24" className="h-5 w-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
             )}
             Continue with Google
-          </Button>
+          </button>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Already have an account?{" "}

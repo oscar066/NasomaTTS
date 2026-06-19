@@ -82,9 +82,9 @@ function ResetPasswordForm() {
 
         <div className="relative z-10 border-t border-white/20 pt-6">
           <p className="text-sm text-white/70 italic">
-            &ldquo;Reset in under a minute — back to reading without the hassle.&rdquo;
+            &ldquo;Reset in under a minute. Back to reading without the hassle.&rdquo;
           </p>
-          <p className="text-xs text-white/50 mt-1">— Amara T., Nasoma user</p>
+          <p className="text-xs text-white/50 mt-1">Amara T., Nasoma user</p>
         </div>
       </div>
 

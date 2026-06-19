@@ -27,17 +27,17 @@ export default function CTASection() {
 
         <FadeIn delay={100}>
           <h2 className="text-2xl md:text-3xl font-bold mb-6 leading-tight">
-            Your next great read is{" "}
+            Start reading more,{" "}
             <span className="bg-gradient-to-r from-primary via-violet-500 to-purple-600 bg-clip-text text-transparent">
-              waiting to be heard.
+              understanding more, today.
             </span>
           </h2>
         </FadeIn>
 
         <FadeIn delay={200}>
           <p className="text-base md:text-lg text-muted-foreground mb-10 max-w-xl mx-auto leading-relaxed">
-            Turn any PDF or document into natural audio in seconds.
-            Start free — no credit card, no commitment.
+            Upload any document and feel the difference. Focused, absorbed, actually getting through your list.
+            Free to start, no credit card needed.
           </p>
         </FadeIn>
 
@@ -65,7 +65,7 @@ export default function CTASection() {
 
         <FadeIn delay={400}>
           <p className="text-sm text-muted-foreground">
-            Free forever · 10,000 characters/month · No credit card required
+            Free forever · No credit card required
           </p>
         </FadeIn>
       </div>

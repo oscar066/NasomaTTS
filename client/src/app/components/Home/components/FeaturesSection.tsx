@@ -1,60 +1,78 @@
-import { Mic, Brain, Globe, Sliders, FileText, Download } from "lucide-react";
+import { Mic, Brain, Globe, Sliders, MessageSquare, FileText, HelpCircle, History } from "lucide-react";
 import FadeIn from "@/app/components/ui/FadeIn";
 
 const features = [
   {
-    icon: Mic,
-    title: "Ultra-Realistic Voices",
+    icon: Brain,
+    title: "Synchronized Read-Along",
     description:
-      "40+ natural-sounding voices across accents and languages — indistinguishable from human narration.",
+      "Audio and highlighting move in sync, word by word. Eyes and ears together, distractions drop, focus holds, more sticks.",
+    iconBg: "bg-gradient-to-br from-emerald-500 to-teal-600",
+    borderHover: "hover:border-emerald-200 dark:hover:border-emerald-900",
+    shadowHover: "hover:shadow-emerald-100 dark:hover:shadow-emerald-950",
+  },
+  {
+    icon: MessageSquare,
+    title: "Chat With Your Document",
+    description:
+      "Ask anything about what you are reading: characters, themes, concepts, or specific passages. Get instant answers without leaving the page.",
     iconBg: "bg-gradient-to-br from-violet-500 to-purple-600",
     borderHover: "hover:border-violet-200 dark:hover:border-violet-900",
     shadowHover: "hover:shadow-violet-100 dark:hover:shadow-violet-950",
   },
   {
     icon: FileText,
-    title: "PDF & Document Support",
+    title: "Instant AI Summary",
     description:
-      "Upload PDFs, articles, and text files. Me Nasoma extracts and reads them cleanly, handling formatting intelligently.",
-    iconBg: "bg-gradient-to-br from-blue-500 to-indigo-600",
-    borderHover: "hover:border-blue-200 dark:hover:border-blue-900",
-    shadowHover: "hover:shadow-blue-100 dark:hover:shadow-blue-950",
-  },
-  {
-    icon: Globe,
-    title: "100+ Languages",
-    description:
-      "Listen in your native language or practice a new one. Full multilingual support with region-specific accents.",
+      "Get a concise overview of any document in seconds. Understand the key points before you dive in or refresh your memory after.",
     iconBg: "bg-gradient-to-br from-sky-500 to-cyan-600",
     borderHover: "hover:border-sky-200 dark:hover:border-sky-900",
     shadowHover: "hover:shadow-sky-100 dark:hover:shadow-sky-950",
   },
   {
-    icon: Sliders,
-    title: "Playback Controls",
+    icon: HelpCircle,
+    title: "Comprehension Quiz",
     description:
-      "Adjust speed from 0.5× to 3×, skip forward, rewind, and pick up exactly where you left off.",
+      "Auto-generated questions test what you have absorbed. A simple way to turn passive reading into active learning.",
     iconBg: "bg-gradient-to-br from-orange-500 to-amber-500",
     borderHover: "hover:border-orange-200 dark:hover:border-orange-900",
     shadowHover: "hover:shadow-orange-100 dark:hover:shadow-orange-950",
   },
   {
-    icon: Brain,
-    title: "Smart Highlighting",
+    icon: History,
+    title: "Reading Recap",
     description:
-      "Follow along as each sentence is highlighted in real time, keeping your place and making it easy to re-read.",
-    iconBg: "bg-gradient-to-br from-emerald-500 to-teal-600",
-    borderHover: "hover:border-emerald-200 dark:hover:border-emerald-900",
-    shadowHover: "hover:shadow-emerald-100 dark:hover:shadow-emerald-950",
-  },
-  {
-    icon: Download,
-    title: "Your Personal Library",
-    description:
-      "All your documents in one place. Upload once, listen anytime — your library is always synced and ready.",
+      "Pick up right where you left off. AI catches you up on everything you have read so far: characters, events, key ideas.",
     iconBg: "bg-gradient-to-br from-rose-500 to-pink-600",
     borderHover: "hover:border-rose-200 dark:hover:border-rose-900",
     shadowHover: "hover:shadow-rose-100 dark:hover:shadow-rose-950",
+  },
+  {
+    icon: Sliders,
+    title: "Read More, Faster",
+    description:
+      "Dial speed from 0.5× to 3×. Your pace grows naturally. More material, less time, no rush.",
+    iconBg: "bg-gradient-to-br from-blue-500 to-indigo-600",
+    borderHover: "hover:border-blue-200 dark:hover:border-blue-900",
+    shadowHover: "hover:shadow-blue-100 dark:hover:shadow-blue-950",
+  },
+  {
+    icon: Mic,
+    title: "Natural, Human-Like Voices",
+    description:
+      "40+ voices across accents and styles, lifelike enough to keep you engaged through a 100-page report.",
+    iconBg: "bg-gradient-to-br from-indigo-500 to-violet-600",
+    borderHover: "hover:border-indigo-200 dark:hover:border-indigo-900",
+    shadowHover: "hover:shadow-indigo-100 dark:hover:shadow-indigo-950",
+  },
+  {
+    icon: Globe,
+    title: "100+ Languages",
+    description:
+      "Read in your native language or practice a new one. Region-specific accents, full multilingual support.",
+    iconBg: "bg-gradient-to-br from-teal-500 to-green-600",
+    borderHover: "hover:border-teal-200 dark:hover:border-teal-900",
+    shadowHover: "hover:shadow-teal-100 dark:hover:shadow-teal-950",
   },
 ];
 
@@ -68,18 +86,18 @@ export default function FeaturesSection() {
           <span className="inline-block text-xs font-semibold tracking-widest uppercase text-primary mb-4 bg-primary/10 px-3 py-1.5 rounded-full">
             Features
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold mb-4 text-foreground">
-            Everything{" "}
+          <h2 className="text-2xl md:text-3xl font-bold mb-4 text-foreground">
+            Built to Help You{" "}
             <span className="bg-gradient-to-r from-primary via-violet-500 to-purple-600 bg-clip-text text-transparent">
-              You Need
+              Read Better
             </span>
           </h2>
           <p className="text-base text-muted-foreground leading-relaxed">
-            Powerful features designed to make listening effortless.
+            Every feature is built around one goal: concentrate, comprehend, and cover more.
           </p>
         </FadeIn>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {features.map((feature, index) => (
             <FadeIn key={index} delay={index * 80} className="h-full">
             <div

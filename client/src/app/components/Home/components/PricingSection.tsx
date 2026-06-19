@@ -6,6 +6,12 @@ import { useState } from "react";
 import Link from "next/link";
 import FadeIn from "@/app/components/ui/FadeIn";
 
+const currencies = [
+  { code: "USD", symbol: "$",    rate: 1 },
+  { code: "GBP", symbol: "£",   rate: 0.79 },
+  { code: "KES", symbol: "Ksh", rate: 130 },
+];
+
 const plans = [
   {
     name: "Free",
@@ -13,10 +19,11 @@ const plans = [
     monthlyPrice: 0,
     period: "forever",
     features: [
-      "10,000 characters per month",
+      "Up to 10 documents",
       "5 natural-sounding voices",
       "Standard quality audio",
       "Basic playback controls",
+      "No AI features",
     ],
     action: "Get Started Free",
     href: "/auth/signup",
@@ -28,8 +35,9 @@ const plans = [
     monthlyPrice: 9,
     period: "per month",
     features: [
-      "100,000 characters per month",
+      "Unlimited documents",
       "40+ premium voices & accents",
+      "All AI features included",
       "High quality audio download",
       "Advanced playback controls",
       "Priority support",
@@ -58,15 +66,21 @@ const plans = [
   },
 ];
 
-function formatPrice(monthlyPrice: number | null, yearly: boolean): string {
+function formatPrice(
+  monthlyPrice: number | null,
+  yearly: boolean,
+  currency: typeof currencies[number]
+): string {
   if (monthlyPrice === null) return "Custom";
-  if (monthlyPrice === 0) return "$0";
-  const price = yearly ? Math.round(monthlyPrice * 0.8) : monthlyPrice;
-  return `$${price}`;
+  if (monthlyPrice === 0) return `${currency.symbol}0`;
+  const base = yearly ? monthlyPrice * 0.8 : monthlyPrice;
+  const converted = Math.round(base * currency.rate);
+  return `${currency.symbol}${converted.toLocaleString()}`;
 }
 
 export default function PricingSection() {
   const [isYearly, setIsYearly] = useState(false);
+  const [currency, setCurrency] = useState(currencies[0]);
 
   return (
     <section id="pricing" className="py-16 bg-secondary/20 relative overflow-hidden">
@@ -76,7 +90,7 @@ export default function PricingSection() {
           <span className="inline-block text-xs font-semibold tracking-widest uppercase text-primary mb-4 bg-primary/10 px-3 py-1.5 rounded-full">
             Pricing
           </span>
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+          <h2 className="text-2xl md:text-3xl font-bold mb-4">
             Simple,{" "}
             <span className="bg-gradient-to-r from-primary via-violet-500 to-purple-600 bg-clip-text text-transparent">
               Transparent Pricing
@@ -86,8 +100,25 @@ export default function PricingSection() {
             Start free and upgrade as you grow. No hidden fees.
           </p>
 
+          {/* Currency switcher */}
+          <div className="flex items-center justify-center gap-1 mt-8 mb-4">
+            {currencies.map((c) => (
+              <button
+                key={c.code}
+                onClick={() => setCurrency(c)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors duration-200 ${
+                  currency.code === c.code
+                    ? "bg-primary text-white"
+                    : "bg-secondary text-muted-foreground hover:bg-secondary/80"
+                }`}
+              >
+                {c.symbol} {c.code}
+              </button>
+            ))}
+          </div>
+
           {/* Billing toggle */}
-          <div className="flex items-center justify-center gap-3 mt-8">
+          <div className="flex items-center justify-center gap-3">
             <span className={`text-sm font-medium ${!isYearly ? "text-foreground" : "text-muted-foreground"}`}>
               Monthly
             </span>
@@ -141,18 +172,18 @@ export default function PricingSection() {
               <div className="mb-6">
                 <div className="flex items-end gap-1">
                   <span className="text-4xl font-bold">
-                    {formatPrice(plan.monthlyPrice, isYearly)}
+                    {formatPrice(plan.monthlyPrice, isYearly, currency)}
                   </span>
                   {plan.monthlyPrice !== null && (
                     <span className="text-muted-foreground text-sm mb-1.5">/{plan.period}</span>
                   )}
                   {plan.monthlyPrice === null && (
-                    <span className="text-muted-foreground text-sm mb-1.5"> — {plan.period}</span>
+                    <span className="text-muted-foreground text-sm mb-1.5">{plan.period}</span>
                   )}
                 </div>
                 {isYearly && plan.monthlyPrice !== null && plan.monthlyPrice > 0 && (
                   <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                    Billed ${Math.round(plan.monthlyPrice * 0.8 * 12)}/year
+                    Billed {currency.symbol}{Math.round(plan.monthlyPrice * 0.8 * 12 * currency.rate).toLocaleString()}/year
                   </p>
                 )}
               </div>

@@ -68,7 +68,7 @@ function VerifyEmailContent() {
             Verify your<br />email address
           </h2>
           <p className="text-white/80 mb-8 leading-relaxed">
-            One quick step to confirm it&apos;s really you — then you&apos;re
+            One quick step to confirm it&apos;s really you, then you&apos;re
             all set to start reading.
           </p>
           <ul className="space-y-4">
@@ -85,9 +85,9 @@ function VerifyEmailContent() {
 
         <div className="relative z-10 border-t border-white/20 pt-6">
           <p className="text-sm text-white/70 italic">
-            &ldquo;Verified in seconds — loved how smooth the onboarding was.&rdquo;
+            &ldquo;Verified in seconds. Loved how smooth the onboarding was.&rdquo;
           </p>
-          <p className="text-xs text-white/50 mt-1">— Priya M., Nasoma user</p>
+          <p className="text-xs text-white/50 mt-1">Priya M., Nasoma user</p>
         </div>
       </div>
 
