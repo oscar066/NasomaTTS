@@ -52,7 +52,7 @@ export const authApi = {
   },
 
   me: (token: string) =>
-    request<{ id: string; username: string; email: string; avatar: string; plan: string }>(
+    request<{ id: string; username: string; email: string; avatar: string; plan: string; is_superuser: boolean }>(
       "/users/me",
       {},
       token
@@ -86,6 +86,77 @@ export const authApi = {
     request<{ id: string; email: string; is_verified: boolean }>(
       "/auth/verify",
       { method: "POST", body: JSON.stringify({ token }) }
+    ),
+};
+
+// ── Admin
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  username: string;
+  avatar: string;
+  plan: string;
+  is_active: boolean;
+  is_verified: boolean;
+  is_superuser: boolean;
+  joined: string;
+  doc_count: number;
+}
+
+export interface AdminStats {
+  total_users: number;
+  total_documents: number;
+  new_users_this_week: number;
+  new_docs_this_week: number;
+  verified_users: number;
+  unverified_users: number;
+}
+
+export const adminApi = {
+  stats: (token: string) =>
+    request<AdminStats>("/admin/stats", {}, token),
+
+  users: (token: string, search = "", skip = 0, limit = 20) =>
+    request<{ total: number; users: AdminUser[] }>(
+      `/admin/users?search=${encodeURIComponent(search)}&skip=${skip}&limit=${limit}`,
+      {},
+      token
+    ),
+
+  toggleActive: (userId: string, token: string) =>
+    request<{ id: string; is_active: boolean }>(
+      `/admin/users/${userId}/toggle-active`,
+      { method: "PATCH" },
+      token
+    ),
+
+  createUser: (token: string, body: { email: string; username: string; is_superuser: boolean; plan: string }) =>
+    request<{ id: string; email: string; username: string }>(
+      "/admin/users",
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    ),
+
+  resendVerification: (userId: string, token: string) =>
+    request<{ sent: boolean }>(
+      `/admin/users/${userId}/resend-verification`,
+      { method: "POST" },
+      token
+    ),
+
+  updatePlan: (userId: string, plan: string, token: string) =>
+    request<{ id: string; plan: string }>(
+      `/admin/users/${userId}/plan`,
+      { method: "PATCH", body: JSON.stringify({ plan }) },
+      token
+    ),
+
+  editUser: (token: string, userId: string, body: { plan: string; is_superuser: boolean }) =>
+    request<{ id: string; plan: string; is_superuser: boolean }>(
+      `/admin/users/${userId}`,
+      { method: "PATCH", body: JSON.stringify(body) },
+      token
     ),
 };
 
