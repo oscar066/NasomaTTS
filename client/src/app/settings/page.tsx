@@ -21,6 +21,20 @@ import { TopBar } from "@/app/components/Dashboard/TopBar";
 type Tab = "profile" | "account";
 
 export default function SettingsPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center bg-background">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+      }
+    >
+      <SettingsContent />
+    </React.Suspense>
+  );
+}
+
+function SettingsContent() {
   const { data: session, status } = useSession({ required: true });
   const router = useRouter();
   const searchParams = useSearchParams();

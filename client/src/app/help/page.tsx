@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   Search,
@@ -151,7 +150,6 @@ function FaqAccordion({ items }: { items: FaqItem[] }) {
 
 export default function HelpPage() {
   const { status } = useSession({ required: true });
-  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth >= 768 : true
   );
@@ -162,10 +160,6 @@ export default function HelpPage() {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-
-  React.useEffect(() => {
-    if (status === "unauthenticated") router.push("/auth/login");
-  }, [status, router]);
 
   if (status === "loading") {
     return (
