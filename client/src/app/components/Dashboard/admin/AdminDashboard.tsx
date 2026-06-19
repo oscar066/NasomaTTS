@@ -51,7 +51,7 @@ export default function AdminDashboard() {
     try {
       const res = await adminApi.users(token, "", 0);
       const sorted = [...res.users].sort(
-        (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
+        (a, b) => new Date(b.joined ?? 0).getTime() - new Date(a.joined ?? 0).getTime()
       );
       setRecentUsers(sorted.slice(0, 5));
     } finally {
@@ -139,7 +139,7 @@ export default function AdminDashboard() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">
-                          {u.created_at ? timeAgo(u.created_at) : "—"}
+                          {u.joined ? timeAgo(u.joined) : "—"}
                         </td>
                       </tr>
                     ))}
