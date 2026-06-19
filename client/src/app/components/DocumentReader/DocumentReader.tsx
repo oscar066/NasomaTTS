@@ -168,7 +168,7 @@ const DocumentReader: React.FC = () => {
         totalPages={overlayTotalParagraphs}
         onBack={() => { handleStop(); router.push("/dashboard"); }}
         onRename={async (newTitle) => {
-          await documentsApi.rename(docId, newTitle, token);
+          await documentsApi.rename(docId, newTitle, token ?? "");
           updateDocument(docId, { title: newTitle });
         }}
       />
