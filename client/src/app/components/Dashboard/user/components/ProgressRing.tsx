@@ -1,8 +1,8 @@
 export function ProgressRing({ percent }: { percent: number }) {
-  const r = 16;
-  const circ = 2 * Math.PI * r;
+  const r      = 16;
+  const circ   = 2 * Math.PI * r;
   const offset = circ - (percent / 100) * circ;
-  const color =
+  const color  =
     percent === 100 ? "#22c55e" :
     percent > 0     ? "hsl(var(--primary))" :
                       "hsl(var(--muted-foreground))";

@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { TopBar } from "./TopBar";
-import { FileCard } from "./FileCard";
-import Sidebar from "./SideBar";
+import { TopBar } from "../TopBar";
+import { FileCard } from "./components/FileCard";
+import Sidebar from "../SideBar";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { documentsApi } from "@/lib/api";
@@ -49,18 +49,14 @@ function EmptyState({ onUpload, isUploading }: EmptyStateProps) {
         disabled={isUploading}
         className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700 text-white text-sm font-medium transition-all shadow-md disabled:opacity-60"
       >
-        {isUploading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Upload className="h-4 w-4" />
-        )}
+        {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
         {isUploading ? "Uploading…" : "Upload your first PDF"}
       </button>
     </div>
   );
 }
 
-export default function Dashboard() {
+export default function UserDashboard() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth >= 768 : true
@@ -71,41 +67,32 @@ export default function Dashboard() {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const { uploadDocument, isLoading: isUploading } = useDocumentUpload();
 
-  const { documents, isLoaded, setDocuments, updateDocument, removeDocument } =
-    useDocumentsStore();
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
+  const fileInputRef            = useRef<HTMLInputElement>(null);
+  const { uploadDocument, isLoading: isUploading } = useDocumentUpload();
+  const { documents, isLoaded, setDocuments, updateDocument, removeDocument } = useDocumentsStore();
 
   const { data: session, status } = useSession({
     required: true,
-    onUnauthenticated() {
-      router.push("/auth/login");
-    },
+    onUnauthenticated() { router.push("/auth/login"); },
   });
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.email) return;
-    // Skip fetch if the store already has the list for this session.
     if (isLoaded) return;
 
     const fetchDocs = async () => {
       try {
         setLoading(true);
         setError(null);
-        const docs = await documentsApi.byAuthor(
-          session.user.email,
-          session.accessToken ?? ""
-        );
+        const docs = await documentsApi.byAuthor(session.user.email, session.accessToken ?? "");
         setDocuments(docs);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Failed to load documents";
         setError(msg);
-        if (msg.toLowerCase().includes("unauthorized")) {
-          router.push("/auth/login");
-        }
+        if (msg.toLowerCase().includes("unauthorized")) router.push("/auth/login");
       } finally {
         setLoading(false);
       }
@@ -115,9 +102,7 @@ export default function Dashboard() {
   }, [status, session, router, isLoaded, setDocuments]);
 
   const handleDelete = (deletedId: string) => removeDocument(deletedId);
-
-  const handleRename = (id: string, newTitle: string) =>
-    updateDocument(id, { title: newTitle });
+  const handleRename = (id: string, newTitle: string) => updateDocument(id, { title: newTitle });
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -132,12 +117,8 @@ export default function Dashboard() {
     try {
       const result = await uploadDocument(file);
       const shortName = file.name.length > 40 ? `${file.name.slice(0, 37)}…` : file.name;
-      toast.success("Document uploaded", {
-        description: `"${shortName}" has been processed and saved.`,
-      });
-      if (result?.id) {
-        router.push(`/documents/${result.id}`);
-      }
+      toast.success("Document uploaded", { description: `"${shortName}" has been processed and saved.` });
+      if (result?.id) router.push(`/documents/${result.id}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "An error occurred during upload.";
       toast.error("Upload failed", { description: msg });
@@ -146,7 +127,7 @@ export default function Dashboard() {
     }
   };
 
-  const firstName = session?.user?.name?.split(" ")[0] ?? "there";
+  const firstName    = session?.user?.name?.split(" ")[0] ?? "there";
   const isInitialLoad = loading && !isLoaded;
 
   if (status === "loading") {
@@ -187,45 +168,23 @@ export default function Dashboard() {
 
           {isInitialLoad && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <SkeletonCard key={i} />
-              ))}
+              {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
           )}
 
           {!isInitialLoad && !error && documents.length === 0 && (
             <>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-                accept="application/pdf"
-              />
-              <EmptyState
-                onUpload={() => fileInputRef.current?.click()}
-                isUploading={isUploading}
-              />
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="application/pdf" />
+              <EmptyState onUpload={() => fileInputRef.current?.click()} isUploading={isUploading} />
             </>
           )}
 
           {!isInitialLoad && documents.length > 0 && (
             <>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-                accept="application/pdf"
-              />
+              <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="application/pdf" />
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                 {documents.map((doc) => (
-                  <FileCard
-                    key={doc.id}
-                    file={doc}
-                    onDelete={handleDelete}
-                    onRename={handleRename}
-                  />
+                  <FileCard key={doc.id} file={doc} onDelete={handleDelete} onRename={handleRename} />
                 ))}
               </div>
             </>

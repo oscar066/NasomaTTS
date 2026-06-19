@@ -16,9 +16,9 @@ import {
 import { toast } from "sonner";
 import { documentsApi, thumbnailProxyUrl, type Document } from "@/lib/api";
 import { getStatus, setStatus, type ReadingStatus } from "@/lib/readingStatus";
-import { ProgressRing }       from "./components/ProgressRing";
-import { StatusBadge }        from "./components/StatusBadge";
-import { ReadingStatusMenu }  from "./components/ReadingStatusMenu";
+import { ProgressRing } from "./ProgressRing";
+import { StatusBadge } from "./StatusBadge";
+import { ReadingStatusMenu } from "./ReadingStatusMenu";
 
 interface FileCardProps {
   file: Document;
@@ -53,7 +53,6 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
     e.stopPropagation();
     setRenameValue(file.title);
     setIsRenaming(true);
-    // Defer focus so the input is in the DOM before we select it
     setTimeout(() => renameInputRef.current?.select(), 0);
   };
 
