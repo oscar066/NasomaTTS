@@ -54,6 +54,33 @@ services:
       - nasoma-network
     restart: always
 
+  # arq background worker — processes email jobs from the Redis queue
+  worker:
+    build:
+      context: ./backend/fastapi
+      dockerfile: Dockerfile
+    container_name: nasoma_worker_prod
+    command: arq app.workers.settings.WorkerSettings
+    environment:
+      - MONGODB_URL=mongodb://nasoma-mongo:27017
+      - MINIO_ENDPOINT=nasoma-minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET}
+      - JWT_SECRET=${JWT_SECRET}
+      - MONGODB_DB=${MONGODB_DB}
+      - REDIS_URL=redis://nasoma-redis:6379
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - FRONTEND_URL=${FRONTEND_URL:-https://me-nasoma.com}
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    networks:
+      - nasoma-network
+    restart: always
+
   # MongoDB
   mongo:
     image: mongo:8
