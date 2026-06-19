@@ -3,12 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from .auth.setup import auth_backend, fastapi_users
-from .models.user import UserCreate, UserRead, UserUpdate
 from .utils.cache import close_cache, connect_cache
 from .utils.config import settings
 from .db.database import close_db, connect_db
-from .routes import documents_router, pdf_router, speak_router, voices_router
+from .routes import auth_router, documents_router, pdf_router, speak_router, voices_router
 from .services.tts import tts_service
 from .utils.logger import setup_logger
 
@@ -50,35 +48,8 @@ async def log_requests(request: Request, call_next):
     logger.info("%s %s %s", request.method, request.url.path, response.status_code)
     return response
 
-
-# ── FastAPI Users routers
-app.include_router(
-    fastapi_users.get_auth_router(auth_backend),
-    prefix="/auth",
-    tags=["auth"],
-)
-app.include_router(
-    fastapi_users.get_register_router(UserRead, UserCreate),
-    prefix="/auth",
-    tags=["auth"],
-)
-app.include_router(
-    fastapi_users.get_reset_password_router(),
-    prefix="/auth",
-    tags=["auth"],
-)
-app.include_router(
-    fastapi_users.get_verify_router(UserRead),
-    prefix="/auth",
-    tags=["auth"],
-)
-app.include_router(
-    fastapi_users.get_users_router(UserRead, UserUpdate),
-    prefix="/users",
-    tags=["users"],
-)
-
-# ── App routers
+# Routers
+app.include_router(auth_router.router)
 app.include_router(documents_router.router)
 app.include_router(pdf_router.router)
 app.include_router(voices_router.router)
