@@ -1,13 +1,12 @@
 /**
  * NextAuth configuration — kept in a dedicated module so it can be imported
  * by both the route handler and any server-side helpers (e.g. getServerSession)
- * without violating Next.js 15's rule that route files may only export HTTP
- * verb handlers.
  */
 
-import { DefaultSession, Session, SessionStrategy } from "next-auth";
+import { Account, DefaultSession, Session, SessionStrategy } from "next-auth";
 import { JWT } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
 import { authApi } from "@/lib/api";
 
 declare module "next-auth" {
@@ -23,6 +22,10 @@ declare module "next-auth" {
 export const authOptions = {
   debug: process.env.NODE_ENV === "development",
   providers: [
+    GoogleProvider({
+      clientId:     process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
     CredentialsProvider({
       name: "Credentials",
       credentials: {
@@ -47,12 +50,24 @@ export const authOptions = {
     maxAge: 30 * 24 * 60 * 60,
   },
   callbacks: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async jwt({ token, user }: { token: JWT; user: any }) {
+    async jwt({ token, user, account }: { token: JWT; user: any; account: Account | null }) {
+      // Google sign-in — exchange Google id_token for our backend JWT
+      if (account?.provider === "google" && account.id_token) {
+        try {
+          const { access_token } = await authApi.googleAuth(account.id_token);
+          const me = await authApi.me(access_token);
+          token.id          = me.id;
+          token.email       = me.email;
+          token.accessToken = access_token;
+        } catch (err) {
+          console.error("Google auth exchange failed:", err);
+        }
+      }
+      // Credentials sign-in — only runs when user.token exists (not for Google)
       if (user) {
-        token.id          = user.id;
-        token.email       = user.email;
-        token.accessToken = user.token;
+        token.id    = user.id;
+        token.email = user.email;
+        if (user.token) token.accessToken = user.token;
       }
       return token;
     },

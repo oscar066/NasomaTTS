@@ -58,6 +58,12 @@ export const authApi = {
       token
     ),
 
+  googleAuth: (idToken: string) =>
+    request<{ access_token: string; token_type: string }>("/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ id_token: idToken }),
+    }),
+
   forgotPassword: (email: string) =>
     request<null>("/auth/forgot-password", {
       method: "POST",
