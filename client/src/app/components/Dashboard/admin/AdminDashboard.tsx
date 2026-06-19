@@ -2,20 +2,27 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { Search, UserPlus, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { ArrowRight, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import Sidebar from "../SideBar";
 import { TopBar } from "../TopBar";
 import { StatsCards } from "./components/StatsCards";
-import { UsersTable } from "./components/UsersTable";
-import { CreateUserModal } from "./components/CreateUserModal";
-import { EditUserModal } from "./components/EditUserModal";
 import { adminApi, type AdminStats, type AdminUser } from "@/lib/api";
-import { toast } from "sonner";
+
+function timeAgo(dateStr: string): string {
+  const diff  = Date.now() - new Date(dateStr).getTime();
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (mins  < 1)  return "just now";
+  if (mins  < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
 
 export default function AdminDashboard() {
   const { data: session, status } = useSession();
+  const router = useRouter();
 
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth >= 768 : true
@@ -27,14 +34,9 @@ export default function AdminDashboard() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const [stats, setStats]           = useState<AdminStats | null>(null);
-  const [users, setUsers]           = useState<AdminUser[]>([]);
-  const [total, setTotal]           = useState(0);
-  const [page, setPage]             = useState(0);
-  const [search, setSearch]         = useState("");
+  const [stats, setStats]         = useState<AdminStats | null>(null);
+  const [recentUsers, setRecentUsers] = useState<AdminUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingUser, setEditingUser]         = useState<AdminUser | null>(null);
 
   const token = session?.accessToken ?? "";
 
@@ -43,58 +45,22 @@ export default function AdminDashboard() {
     try { setStats(await adminApi.stats(token)); } catch {}
   }, [token]);
 
-  const fetchUsers = useCallback(async () => {
+  const fetchRecentUsers = useCallback(async () => {
     if (!token) return;
     setLoadingUsers(true);
     try {
-      const res = await adminApi.users(token, search, page * 20);
-      setUsers(res.users);
-      setTotal(res.total);
+      const res = await adminApi.users(token, "", 0);
+      const sorted = [...res.users].sort(
+        (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
+      );
+      setRecentUsers(sorted.slice(0, 5));
     } finally {
       setLoadingUsers(false);
     }
-  }, [token, search, page]);
+  }, [token]);
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
-  useEffect(() => { fetchUsers(); }, [fetchUsers]);
-  useEffect(() => { setPage(0); }, [search]);
-
-  const handleToggleActive = async (userId: string) => {
-    if (!token) return;
-    try {
-      const updated = await adminApi.toggleActive(userId, token);
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_active: updated.is_active } : u));
-      toast.success(updated.is_active ? "User reinstated" : "User suspended");
-    } catch (err: unknown) {
-      toast.error("Action failed", { description: err instanceof Error ? err.message : "Unknown error" });
-    }
-  };
-
-  const handleEditSaved = (updated: Pick<AdminUser, "id" | "plan" | "is_superuser">) => {
-    setUsers(prev => prev.map(u => u.id === updated.id ? { ...u, ...updated } : u));
-    toast.success("User updated");
-  };
-
-  const handleUpdatePlan = async (userId: string, plan: string) => {
-    if (!token) return;
-    try {
-      const updated = await adminApi.updatePlan(userId, plan, token);
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, plan: updated.plan } : u));
-      toast.success(`Plan updated to ${updated.plan}`);
-    } catch (err: unknown) {
-      toast.error("Failed to update plan", { description: err instanceof Error ? err.message : "Unknown error" });
-    }
-  };
-
-  const handleResendVerification = async (userId: string) => {
-    if (!token) return;
-    try {
-      await adminApi.resendVerification(userId, token);
-      toast.success("Verification email sent");
-    } catch (err: unknown) {
-      toast.error("Failed to send email", { description: err instanceof Error ? err.message : "Unknown error" });
-    }
-  };
+  useEffect(() => { fetchRecentUsers(); }, [fetchRecentUsers]);
 
   if (status === "loading") {
     return (
@@ -112,66 +78,78 @@ export default function AdminDashboard() {
         <TopBar onToggleSidebar={() => setSidebarOpen(o => !o)} />
 
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">Overview of your application and users</p>
-            </div>
-            <Button
-              onClick={() => setShowCreateModal(true)}
-              className="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700 text-white gap-2 flex-shrink-0"
-            >
-              <UserPlus className="h-4 w-4" />
-              New user
-            </Button>
+          <div>
+            <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Overview of your application and users</p>
           </div>
 
           <StatsCards stats={stats} />
 
+          {/* Recent users */}
           <div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="relative max-w-xs flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <Input
-                  placeholder="Search by name or email…"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="pl-9 h-8 text-sm"
-                />
-              </div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold">Recent Users</h2>
+              <button
+                onClick={() => router.push("/admin/users")}
+                className="flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                View all <ArrowRight className="h-3 w-3" />
+              </button>
             </div>
 
-            <UsersTable
-              users={users}
-              total={total}
-              page={page}
-              onPageChange={setPage}
-              onToggleActive={handleToggleActive}
-              onResendVerification={handleResendVerification}
-              onUpdatePlan={handleUpdatePlan}
-              onEdit={setEditingUser}
-              loading={loadingUsers}
-            />
+            {loadingUsers ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : recentUsers.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">No users yet.</p>
+            ) : (
+              <div className="border border-border rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/50">
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">User</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Plan</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Status</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Joined</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {recentUsers.map((u) => (
+                      <tr key={u.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-3">
+                          <p className="font-medium leading-none">{u.username}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{u.email}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                            u.plan === "pro"
+                              ? "bg-primary/10 text-primary"
+                              : "bg-secondary text-muted-foreground"
+                          }`}>
+                            {u.plan === "pro" ? "Pro" : "Free"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium ${
+                            u.is_active ? "text-green-600" : "text-destructive"
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${u.is_active ? "bg-green-500" : "bg-destructive"}`} />
+                            {u.is_active ? "Active" : "Suspended"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          {u.created_at ? timeAgo(u.created_at) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </main>
       </div>
-
-      {showCreateModal && (
-        <CreateUserModal
-          token={token}
-          onClose={() => setShowCreateModal(false)}
-          onCreated={() => { fetchStats(); fetchUsers(); }}
-        />
-      )}
-
-      {editingUser && (
-        <EditUserModal
-          user={editingUser}
-          token={token}
-          onClose={() => setEditingUser(null)}
-          onSaved={handleEditSaved}
-        />
-      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import React, { useMemo, useRef, useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import NasomaLogo from "../Logo/nasoma-logo";
 import TTSOverlay            from "./components/TTSOverlay";
@@ -11,13 +11,20 @@ import DocumentReaderHeader  from "./components/DocumentReaderHeader";
 import TextReader            from "./components/TextReader";
 import AIActionsSidebar      from "./components/AIActionsSidebar";
 import { useDocumentReader } from "@/hooks/useDocumentReader";
+import { documentsApi }      from "@/lib/api";
+import { useDocumentsStore } from "@/store/documents";
 
 const PDFViewer = dynamic(() => import("./components/PDFViewer"), {
   ssr: false,
   loading: () => (
-    <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
-      <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      <span className="text-sm">Loading PDF viewer…</span>
+    <div className="flex flex-col gap-4 p-6 animate-pulse">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="space-y-2">
+          <div className="h-3 bg-muted rounded w-full" />
+          <div className="h-3 bg-muted rounded w-11/12" />
+          <div className="h-3 bg-muted rounded w-4/5" />
+        </div>
+      ))}
     </div>
   ),
 });
@@ -28,8 +35,11 @@ const HEADER_HEIGHT  = 56;
 const DocumentReader: React.FC = () => {
   const router = useRouter();
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const { updateDocument } = useDocumentsStore();
 
   const {
+    docId,
+    token,
     state: {
       docName,
       text,
@@ -97,10 +107,48 @@ const DocumentReader: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-3">
-        <NasomaLogo size="md" showPulse />
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        <p className="text-muted-foreground text-sm">Loading document…</p>
+      <div className="min-h-screen flex flex-col bg-background">
+        {/* Fake header */}
+        <div className="h-14 border-b border-border bg-background flex items-center px-4 gap-3 flex-shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-muted animate-pulse" />
+          <div className="flex-1 max-w-xs h-4 rounded bg-muted animate-pulse" />
+          <div className="ml-auto flex items-center gap-2">
+            <div className="w-16 h-7 rounded-lg bg-muted animate-pulse" />
+            <div className="w-20 h-7 rounded-lg bg-muted animate-pulse" />
+          </div>
+        </div>
+
+        {/* Fake content */}
+        <div className="flex-1 flex flex-col items-center px-6 pt-10 pb-48 gap-5 overflow-hidden">
+          {/* Page label */}
+          <div className="w-24 h-3 rounded bg-muted animate-pulse" />
+
+          {/* Document page skeleton */}
+          <div className="w-full max-w-2xl bg-card border border-border rounded-xl p-8 space-y-4 shadow-sm">
+            <div className="h-3 bg-muted rounded animate-pulse w-1/3 mb-6" />
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <div className="h-3 bg-muted rounded animate-pulse w-full" />
+                <div className="h-3 bg-muted rounded animate-pulse w-11/12" />
+                <div className="h-3 bg-muted rounded animate-pulse w-4/5" />
+              </div>
+            ))}
+            <div className="pt-4 space-y-2">
+              <div className="h-3 bg-muted rounded animate-pulse w-full" />
+              <div className="h-3 bg-muted rounded animate-pulse w-3/4" />
+            </div>
+          </div>
+        </div>
+
+        {/* Fake playback bar */}
+        <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur px-6 py-4 flex flex-col gap-3">
+          <div className="w-full h-1 rounded-full bg-muted animate-pulse" />
+          <div className="flex items-center justify-center gap-4">
+            <div className="w-8 h-8 rounded-full bg-muted animate-pulse" />
+            <div className="w-10 h-10 rounded-full bg-muted animate-pulse" />
+            <div className="w-8 h-8 rounded-full bg-muted animate-pulse" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -119,6 +167,10 @@ const DocumentReader: React.FC = () => {
         currentPage={overlayParagraphIndex}
         totalPages={overlayTotalParagraphs}
         onBack={() => { handleStop(); router.push("/dashboard"); }}
+        onRename={async (newTitle) => {
+          await documentsApi.rename(docId, newTitle, token);
+          updateDocument(docId, { title: newTitle });
+        }}
       />
 
       {error && (

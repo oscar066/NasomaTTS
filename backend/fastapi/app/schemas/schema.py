@@ -46,3 +46,9 @@ class ProgressUpdate(BaseModel):
     """
 
     current_page: int
+
+
+class StatusUpdate(BaseModel):
+    """Payload for ``PATCH /documents/{doc_id}/status``."""
+
+    reading_status: str | None = None

@@ -11,6 +11,7 @@ import {
   Zap,
   Crown,
   ShieldCheck,
+  Users,
 } from "lucide-react";
 import NasomaLogo from "../Logo/nasoma-logo";
 import { useDocumentUpload } from "@/hooks/useDocumentUpload";
@@ -26,7 +27,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
-  { icon: FileText, label: "All Documents", href: "/dashboard" },
+  { icon: FileText, label: "All Documents", href: "#" },
 ];
 
 const bottomNavItems: NavItem[] = [
@@ -147,7 +148,7 @@ export default function Sidebar({ isOpen }: SidebarProps) {
           );
         })}
 
-        {/* Admin link — superusers only */}
+        {/* Admin links — superusers only */}
         {isSuperuser && (
           <>
             {isOpen && (
@@ -155,18 +156,27 @@ export default function Sidebar({ isOpen }: SidebarProps) {
                 Admin
               </p>
             )}
-            <button
-              onClick={() => router.push("/admin")}
-              title={!isOpen ? "Admin" : undefined}
-              className={`
-                flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium transition-colors w-full text-left
-                ${pathname.startsWith("/admin") ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}
-                ${!isOpen ? "justify-center" : ""}
-              `}
-            >
-              <ShieldCheck className="h-4 w-4 flex-shrink-0" />
-              {isOpen && <span>Admin Dashboard</span>}
-            </button>
+            {[
+              { icon: ShieldCheck, label: "Admin Dashboard", href: "/admin" },
+              { icon: Users,       label: "Users",           href: "/admin/users" },
+            ].map(({ icon: Icon, label, href }) => {
+              const active = pathname === href;
+              return (
+                <button
+                  key={href}
+                  onClick={() => router.push(href)}
+                  title={!isOpen ? label : undefined}
+                  className={`
+                    flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium transition-colors w-full text-left
+                    ${active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}
+                    ${!isOpen ? "justify-center" : ""}
+                  `}
+                >
+                  <Icon className="h-4 w-4 flex-shrink-0" />
+                  {isOpen && <span>{label}</span>}
+                </button>
+              );
+            })}
           </>
         )}
       </nav>
@@ -199,14 +209,18 @@ export default function Sidebar({ isOpen }: SidebarProps) {
                 <span className="text-xs font-semibold text-primary">Free Plan</span>
               </div>
               <p className="text-[11px] text-muted-foreground mb-2">
-                Upgrade for more voices &amp; unlimited documents.
+                Unlock AI tools, 40+ premium voices, and unlimited documents.
               </p>
-              <button className="w-full text-xs font-semibold bg-gradient-to-r from-primary to-purple-600 text-white py-1.5 rounded-md hover:opacity-90 transition-opacity">
-                Upgrade
+              <button
+                onClick={() => router.push("/upgrade")}
+                className="w-full text-xs font-semibold bg-gradient-to-r from-primary to-purple-600 text-white py-1.5 rounded-md hover:opacity-90 transition-opacity"
+              >
+                Upgrade to Pro
               </button>
             </div>
           ) : (
             <button
+              onClick={() => router.push("/upgrade")}
               className="flex justify-center w-full py-2 text-muted-foreground hover:text-primary transition-colors"
               title="Upgrade to Pro"
             >
@@ -215,21 +229,24 @@ export default function Sidebar({ isOpen }: SidebarProps) {
           )
         )}
 
-        {bottomNavItems.map(({ icon: Icon, label, href }) => (
-          <button
-            key={label}
-            onClick={() => router.push(href)}
-            title={!isOpen ? label : undefined}
-            className={`
-              flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium transition-colors w-full text-left
-              text-muted-foreground hover:bg-secondary hover:text-foreground
-              ${!isOpen ? "justify-center" : ""}
-            `}
-          >
-            <Icon className="h-4 w-4 flex-shrink-0" />
-            {isOpen && <span>{label}</span>}
-          </button>
-        ))}
+        {bottomNavItems.map(({ icon: Icon, label, href }) => {
+          const active = pathname === href;
+          return (
+            <button
+              key={label}
+              onClick={() => router.push(href)}
+              title={!isOpen ? label : undefined}
+              className={`
+                flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium transition-colors w-full text-left
+                ${active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}
+                ${!isOpen ? "justify-center" : ""}
+              `}
+            >
+              <Icon className="h-4 w-4 flex-shrink-0" />
+              {isOpen && <span>{label}</span>}
+            </button>
+          );
+        })}
       </div>
     </aside>
   );
