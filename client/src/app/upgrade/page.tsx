@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import {
   Check,
   X,
@@ -50,7 +49,6 @@ function formatPrice(monthlyPrice: number, yearly: boolean, currency: typeof cur
 
 export default function UpgradePage() {
   const { data: session, status } = useSession({ required: true });
-  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth >= 768 : true
   );
@@ -62,10 +60,6 @@ export default function UpgradePage() {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-
-  React.useEffect(() => {
-    if (status === "unauthenticated") router.push("/auth/login");
-  }, [status, router]);
 
   if (status === "loading") {
     return (
