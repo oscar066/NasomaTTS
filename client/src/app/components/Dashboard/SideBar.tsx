@@ -91,6 +91,35 @@ export default function Sidebar({ isOpen }: SidebarProps) {
         )}
       </div>
 
+      {/* Upload — pinned below logo, never scrolls */}
+      <div className={`px-3 py-3 border-b border-border flex-shrink-0 ${!isOpen ? "flex justify-center" : ""}`}>
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+          accept="application/pdf"
+        />
+        <button
+          onClick={handleUploadClick}
+          disabled={isLoading}
+          title={!isOpen ? "Upload PDF" : undefined}
+          className={`
+            flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all w-full
+            bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700
+            text-white shadow-sm hover:shadow-md disabled:opacity-60
+            ${!isOpen ? "w-10 h-10 justify-center px-0 rounded-xl" : ""}
+          `}
+        >
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin" />
+          ) : (
+            <Upload className="h-4 w-4 flex-shrink-0" />
+          )}
+          {isOpen && <span>{isLoading ? "Uploading…" : "Upload PDF"}</span>}
+        </button>
+      </div>
+
       {/* Main nav */}
       <nav className="flex flex-col gap-1 p-3 flex-1 overflow-y-auto">
         {isOpen && (
@@ -140,33 +169,6 @@ export default function Sidebar({ isOpen }: SidebarProps) {
             </button>
           </>
         )}
-
-        {/* Upload */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          className="hidden"
-          accept="application/pdf"
-        />
-        <button
-          onClick={handleUploadClick}
-          disabled={isLoading}
-          title={!isOpen ? "Upload PDF" : undefined}
-          className={`
-            flex items-center gap-3 rounded-lg px-2 py-2 text-sm font-medium transition-colors w-full mt-2
-            bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700 text-white
-            disabled:opacity-60
-            ${!isOpen ? "justify-center" : ""}
-          `}
-        >
-          {isLoading ? (
-            <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin" />
-          ) : (
-            <Upload className="h-4 w-4 flex-shrink-0" />
-          )}
-          {isOpen && <span>{isLoading ? "Uploading…" : "Upload PDF"}</span>}
-        </button>
       </nav>
 
       {/* Bottom section */}
