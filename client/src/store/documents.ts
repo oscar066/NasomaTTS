@@ -10,6 +10,9 @@ interface DocumentsStore {
   updateDocument: (id: string, patch: Partial<Document>) => void;
   removeDocument: (id: string) => void;
   reset: () => void;
+  /** IDs of notifications the user has dismissed this session. */
+  readNotificationIds: string[];
+  markNotificationRead: (id: string) => void;
 }
 
 export const useDocumentsStore = create<DocumentsStore>((set) => ({
@@ -30,5 +33,13 @@ export const useDocumentsStore = create<DocumentsStore>((set) => ({
     set((s) => ({ documents: s.documents.filter((d) => d.id !== id) })),
 
   // Call on sign-out so a new user doesn't briefly see stale data.
-  reset: () => set({ documents: [], isLoaded: false }),
+  reset: () => set({ documents: [], isLoaded: false, readNotificationIds: [] }),
+
+  readNotificationIds: [],
+  markNotificationRead: (id) =>
+    set((s) => ({
+      readNotificationIds: s.readNotificationIds.includes(id)
+        ? s.readNotificationIds
+        : [...s.readNotificationIds, id],
+    })),
 }));

@@ -70,6 +70,7 @@ export default function UserDashboard() {
 
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const fileInputRef            = useRef<HTMLInputElement>(null);
   const { uploadDocument, isLoading: isUploading } = useDocumentUpload();
   const { documents, isLoaded, setDocuments, updateDocument, removeDocument } = useDocumentsStore();
@@ -127,8 +128,11 @@ export default function UserDashboard() {
     }
   };
 
-  const firstName    = session?.user?.name?.split(" ")[0] ?? "there";
+  const firstName     = session?.user?.name?.split(" ")[0] ?? "there";
   const isInitialLoad = loading && !isLoaded;
+  const filteredDocs  = searchQuery.trim()
+    ? documents.filter((d) => d.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    : documents;
 
   if (status === "loading") {
     return (
@@ -143,7 +147,7 @@ export default function UserDashboard() {
       <Sidebar isOpen={sidebarOpen} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <TopBar onToggleSidebar={() => setSidebarOpen((p) => !p)} />
+        <TopBar onToggleSidebar={() => setSidebarOpen((p) => !p)} onSearch={setSearchQuery} />
 
         <main className="flex-1 overflow-y-auto p-6">
           <div className="mb-6">
@@ -153,7 +157,9 @@ export default function UserDashboard() {
             {!isInitialLoad && !error && (
               <p className="text-sm text-muted-foreground mt-0.5">
                 {documents.length === 0
-                  ? "Your library is empty — upload a PDF to get started."
+                  ? "Your library is empty. Upload a PDF to get started."
+                  : searchQuery
+                  ? `${filteredDocs.length} result${filteredDocs.length !== 1 ? "s" : ""} for "${searchQuery}"`
                   : `${documents.length} document${documents.length !== 1 ? "s" : ""} in your library`}
               </p>
             )}
@@ -182,11 +188,17 @@ export default function UserDashboard() {
           {!isInitialLoad && documents.length > 0 && (
             <>
               <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="application/pdf" />
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-                {documents.map((doc) => (
-                  <FileCard key={doc.id} file={doc} onDelete={handleDelete} onRename={handleRename} />
-                ))}
-              </div>
+              {filteredDocs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24 text-center">
+                  <p className="text-sm text-muted-foreground">No documents match your search.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                  {filteredDocs.map((doc) => (
+                    <FileCard key={doc.id} file={doc} onDelete={handleDelete} onRename={handleRename} />
+                  ))}
+                </div>
+              )}
             </>
           )}
         </main>
