@@ -61,7 +61,7 @@ export const useDocumentReader = () => {
   const searchParams = useSearchParams();
 
   const doc      = useDocumentLoad();
-  const voices   = useVoices();
+  const voices   = useVoices(doc.token);
   const playback = useTTSPlayback({
     docId:        doc.documentId,
     token:        doc.token,
@@ -74,9 +74,9 @@ export const useDocumentReader = () => {
     ttsAvailable: voices.ttsAvailable,
   });
 
-  // Load voices once on mount — independent of the document fetch.
+  // Load voices once on mount. Pass token when available so server prefs load.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { voices.fetchVoices(); }, []);
+  useEffect(() => { voices.fetchVoices(doc.token); }, [doc.token]);
 
   // Autoplay when both the document and the voice list are ready.
   useEffect(() => {
@@ -126,6 +126,8 @@ export const useDocumentReader = () => {
 
   return {
     state,
+    docId:           doc.documentId,
+    token:           doc.token,
     highlightWordIdx: playback.state.absoluteWordIdx,
     setVoice:        voices.setVoice,
     setSpeed:        playback.setSpeed,
