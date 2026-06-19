@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .utils.cache import close_cache, connect_cache
 from .utils.config import settings
 from .db.database import close_db, connect_db
-from .routes import auth_router, documents_router, pdf_router, speak_router, voices_router
+from .routes import admin_router, auth_router, documents_router, pdf_router, speak_router, voices_router
 from .services.tts import tts_service
 from .utils.logger import setup_logger
 
@@ -50,6 +50,7 @@ async def log_requests(request: Request, call_next):
 
 # Routers
 app.include_router(auth_router.router)
+app.include_router(admin_router.router)
 app.include_router(documents_router.router)
 app.include_router(pdf_router.router)
 app.include_router(voices_router.router)
