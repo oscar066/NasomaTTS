@@ -35,6 +35,10 @@ export default {
           '0%, 100%': { transform: 'scale(1)',    opacity: '1' },
           '50%':       { transform: 'scale(1.18)', opacity: '0.7' },
         },
+        'wave-bar': {
+          '0%, 100%': { transform: 'scaleY(0.35)' },
+          '50%':       { transform: 'scaleY(1)' },
+        },
       },
       animation: {
         'fade-up':        'fade-up 0.65s ease-out forwards',
@@ -43,6 +47,7 @@ export default {
         'pulse-ring':     'pulse-ring 2s ease-out infinite',
         'progress-fill':  'progress-fill 2.5s ease-out 1.2s forwards',
         'orb-drift':      'orb-drift 8s ease-in-out infinite',
+        'wave-bar':       'wave-bar 1.1s ease-in-out infinite',
       },
   		colors: {
   			background: 'hsl(var(--background))',
