@@ -37,8 +37,8 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     frontend_url: str = "http://localhost:3001"
 
-    # ── Kokoro TTS sidecar
-    kokoro_url: str = "http://localhost:8001"
+    # ── Kokoro TTS sidecar (remsky/Kokoro-FastAPI, port 8880)
+    kokoro_url: str = "http://localhost:8880"
 
     # ── MinIO object storage
     minio_endpoint: str = "localhost:9000"
