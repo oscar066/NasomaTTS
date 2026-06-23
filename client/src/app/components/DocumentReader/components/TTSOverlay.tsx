@@ -2,23 +2,56 @@
 
 import React, { useState } from "react";
 import {
-  Play,
-  Pause,
+  Headphones,
+  Volume2,
   SkipBack,
   SkipForward,
-  Mic,
-  ChevronUp,
   ChevronDown,
 } from "lucide-react";
 import type { Voice } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+// One distinct colour per Kokoro voice — drives the avatar circle
+const VOICE_COLORS: Record<string, string> = {
+  // American · Female
+  sophia:   "bg-rose-400",
+  luna:     "bg-violet-400",
+  aria:     "bg-purple-400",
+  bella:    "bg-pink-400",
+  zara:     "bg-orange-400",
+  iris:     "bg-emerald-400",
+  nina:     "bg-fuchsia-400",
+  nova:     "bg-amber-400",
+  river:    "bg-teal-400",
+  sarah:    "bg-red-400",
+  sky:      "bg-sky-400",
+  // American · Male
+  oscar:    "bg-blue-500",
+  echo:     "bg-slate-500",
+  eli:      "bg-orange-500",
+  thor:     "bg-indigo-500",
+  liam:     "bg-cyan-600",
+  max:      "bg-green-500",
+  onyx:     "bg-zinc-600",
+  rex:      "bg-yellow-500",
+  // British · Female
+  alice:    "bg-lime-500",
+  emma:     "bg-rose-600",
+  isabella: "bg-purple-500",
+  lily:     "bg-pink-600",
+  // British · Male
+  daniel:   "bg-blue-700",
+  fable:    "bg-amber-600",
+  george:   "bg-teal-600",
+  lewis:    "bg-indigo-700",
+};
+
+const avatarColor = (id: string) => VOICE_COLORS[id] ?? "bg-muted-foreground/40";
 
 interface TTSOverlayProps {
   isPlaying: boolean;
@@ -40,6 +73,8 @@ interface TTSOverlayProps {
 }
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+const GROUP_ORDER = ["American", "British", "Other"];
+const GROUP_FLAG: Record<string, string> = { American: "🇺🇸", British: "🇬🇧" };
 
 const TTSOverlay: React.FC<TTSOverlayProps> = ({
   isPlaying,
@@ -60,15 +95,24 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
   onSpeedChange,
 }) => {
   const [expanded, setExpanded] = useState(true);
-
-  const speedIdx  = SPEEDS.indexOf(speed);
-  const canSlower = speedIdx > 0;
-  const canFaster = speedIdx < SPEEDS.length - 1;
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [speedOpen, setSpeedOpen] = useState(false);
 
   const progress =
     totalParagraphs > 0
       ? ((currentParagraphIndex + 1) / totalParagraphs) * 100
       : 0;
+
+  const selectedVoice = voices.find((v) => v.id === voice);
+
+  const premium  = voices.filter((v) => v.tier === "premium");
+  const standard = voices.filter((v) => v.tier !== "premium");
+
+  const premiumGroups: Record<string, Voice[]> = {};
+  for (const v of premium) {
+    const g = v.group ?? "Other";
+    (premiumGroups[g] ??= []).push(v);
+  }
 
   return (
     <div
@@ -78,19 +122,28 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
         transition: "left 300ms ease-in-out",
       }}
     >
-      <div className="rounded-2xl border border-border bg-muted backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.12)] overflow-hidden">
+      <div className="rounded-2xl border border-white/10 bg-background/20 backdrop-blur-2xl shadow-[0_8px_40px_rgba(0,0,0,0.15),inset_0_1px_0_rgba(255,255,255,0.12)] overflow-hidden">
+
+        {/* Drag handle — collapses / expands word strip */}
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="w-full flex items-center justify-center pt-2 pb-1 group"
+          title={expanded ? "Collapse" : "Expand"}
+        >
+          <div className="w-8 h-1 rounded-full bg-border/60 group-hover:bg-primary/40 transition-colors" />
+        </button>
 
         {/* Progress bar */}
-        <div className="h-0.5 bg-border">
+        <div className="h-0.5 bg-border/30">
           <div
-            className="h-full bg-gradient-to-r from-primary to-purple-600 transition-all duration-300"
+            className="h-full bg-gradient-to-r from-primary/60 to-purple-500/60 transition-all duration-500 ease-out rounded-full"
             style={{ width: `${progress}%` }}
           />
         </div>
 
         {/* Word focus strip */}
         {expanded && (
-          <div className="bg-background/30 min-h-[60px] flex items-center justify-center px-6 py-3 border-b border-border/60 overflow-hidden">
+          <div className="min-h-[64px] flex items-center justify-center px-6 py-3 border-b border-border/40 overflow-hidden">
             {wordWindow.length > 0 ? (
               <div className="flex items-center gap-2 flex-wrap justify-center">
                 {wordWindow.map((word, i) => {
@@ -103,10 +156,10 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
                       className={`
                         transition-all duration-75 select-none
                         ${isCurrent
-                          ? "text-primary font-bold text-xl scale-110 drop-shadow-[0_0_6px_rgba(99,102,241,0.4)]"
+                          ? "text-primary font-bold text-xl scale-110 drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]"
                           : isPast
-                          ? "text-muted-foreground/50 text-base"
-                          : "text-foreground/80 text-base"
+                          ? "text-muted-foreground/40 text-base"
+                          : "text-foreground/70 text-base"
                         }
                       `}
                     >
@@ -115,116 +168,183 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
                   );
                 })}
               </div>
+            ) : isPlaying ? (
+              <div className="flex items-center gap-1.5">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce"
+                    style={{ animationDelay: `${i * 150}ms` }}
+                  />
+                ))}
+              </div>
             ) : (
-              <p className="text-muted-foreground text-sm italic">
-                {isPlaying ? "Synthesising…" : "Press play to start reading"}
+              <p className="text-muted-foreground/60 text-sm">
+                Press play to start reading
               </p>
             )}
           </div>
         )}
 
         {/* Controls */}
-        <div className="h-14 px-3 grid grid-cols-3 items-center">
+        <div className="h-14 px-3 flex items-center justify-center">
 
-          {/* Left — Voice selector */}
-          <div className="flex items-center gap-1.5">
-            <Mic className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-            <Select value={voice} onValueChange={onVoiceChange}>
-              <SelectTrigger className="h-7 w-32 text-xs bg-background/40 border-border focus:ring-0 focus:ring-offset-0">
-                <SelectValue placeholder="Voice" />
-              </SelectTrigger>
-              <SelectContent>
-                {voices.map((v, i) => (
-                  <SelectItem key={`${v.id}-${i}`} value={v.id} className="text-xs">
-                    {v.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Center cluster — voice · prev · play · next · speed */}
+          <div className="flex items-center gap-10">
 
-          {/* Center — Playback */}
-          <div className="flex items-center justify-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              onClick={onPrevParagraph}
-              disabled={currentParagraphIndex <= 0}
-              title="Previous paragraph (←)"
-            >
-              <SkipBack className="h-4 w-4" />
-            </Button>
+            {/* Voice picker */}
+            <DropdownMenu open={voiceOpen} onOpenChange={setVoiceOpen}>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1.5 h-7 px-2 rounded-md bg-background/40 border border-border text-xs hover:bg-background/60 transition-colors focus:outline-none">
+                  <div className={`w-4 h-4 rounded-full ${avatarColor(voice)} flex items-center justify-center text-white font-bold text-[8px] flex-shrink-0`}>
+                    {(selectedVoice?.label ?? "?")[0].toUpperCase()}
+                  </div>
+                  <span className="max-w-[64px] truncate">
+                    {selectedVoice?.label ?? "Voice"}
+                  </span>
+                  <ChevronDown className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
 
-            {/* Spinner visible only while voices are loading, never during playback */}
-            <div className="relative flex items-center justify-center">
-              {(!isPlaying && voices.length === 0) && (
-                <span
-                  className="absolute rounded-full border-2 border-primary/60 border-t-transparent animate-spin pointer-events-none"
-                  style={{ inset: "-5px" }}
-                />
-              )}
-              <button
-                onClick={isPlaying ? onStop : onPlay}
-                className="h-9 w-9 rounded-full bg-gradient-to-br from-primary to-purple-600 hover:opacity-90 text-white flex items-center justify-center shadow-md shadow-primary/20 transition-all hover:scale-105 active:scale-95"
-                title={isPlaying ? "Pause (Space)" : "Play (Space)"}
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                sideOffset={8}
+                className="w-72 p-2 z-[70]"
               >
-                {isPlaying
-                  ? <Pause className="h-3.5 w-3.5" />
-                  : <Play  className="h-3.5 w-3.5 ml-0.5" />
-                }
-              </button>
+                <div className="max-h-44 overflow-y-auto pr-0.5">
+                  <p className="sticky top-0 text-[10px] font-semibold text-primary mb-1 px-1 py-0.5 flex items-center gap-1 bg-popover z-10">
+                    <span>✦</span><span>Premium</span>
+                  </p>
+                  {GROUP_ORDER.filter((g) => premiumGroups[g]).map((g) => (
+                    <div key={g} className="mb-2 last:mb-0">
+                      <p className="text-[10px] text-muted-foreground mb-1 px-1 flex items-center gap-1">
+                        {GROUP_FLAG[g] ?? ""} {g}
+                      </p>
+                      <div className="grid grid-cols-5 gap-1">
+                        {premiumGroups[g].map((v) => (
+                          <button
+                            key={v.id}
+                            onClick={() => { onVoiceChange(v.id); setVoiceOpen(false); }}
+                            className={`flex flex-col items-center gap-0.5 py-1.5 px-1 rounded-lg transition-all ${
+                              voice === v.id
+                                ? "bg-primary/15 ring-1 ring-primary/50"
+                                : "hover:bg-secondary/70"
+                            }`}
+                          >
+                            <div className={`w-8 h-8 rounded-full ${avatarColor(v.id)} flex items-center justify-center text-white font-bold text-xs shadow-sm`}>
+                              {v.label[0]}
+                            </div>
+                            <span className="text-[9px] text-foreground/80 leading-tight w-full text-center truncate px-0.5">
+                              {v.label}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {standard.length > 0 && (
+                  <div className="mt-1.5 pt-1.5 border-t border-border">
+                    <p className="text-[10px] font-semibold text-primary mb-1 px-1">
+                      Standard
+                    </p>
+                    <div className="max-h-24 overflow-y-auto space-y-0.5 pr-0.5">
+                      {standard.map((v) => (
+                        <button
+                          key={v.id}
+                          onClick={() => { onVoiceChange(v.id); setVoiceOpen(false); }}
+                          className={`w-full text-left text-xs px-2 py-0.5 rounded-md transition-colors ${
+                            voice === v.id
+                              ? "bg-primary/15 text-primary"
+                              : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          }`}
+                        >
+                          {v.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Playback — prev · play · next kept tight together */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={onPrevParagraph}
+                disabled={currentParagraphIndex <= 0}
+                title="Previous paragraph (←)"
+              >
+                <SkipBack className="h-4 w-4" />
+              </Button>
+
+              <div className="relative flex items-center justify-center">
+                {(!isPlaying && voices.length === 0) && (
+                  <span
+                    className="absolute rounded-full border-2 border-primary/60 border-t-transparent animate-spin pointer-events-none"
+                    style={{ inset: "-5px" }}
+                  />
+                )}
+                <button
+                  onClick={isPlaying ? onStop : onPlay}
+                  className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-purple-500 hover:opacity-90 text-white flex items-center justify-center shadow-lg shadow-primary/25 transition-all hover:scale-105 active:scale-95"
+                  title={isPlaying ? "Pause (Space)" : "Play (Space)"}
+                >
+                  {isPlaying
+                    ? <Volume2     className="h-4 w-4" />
+                    : <Headphones  className="h-4 w-4" />
+                  }
+                </button>
+              </div>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={onNextParagraph}
+                disabled={currentParagraphIndex >= totalParagraphs - 1}
+                title="Next paragraph (→)"
+              >
+                <SkipForward className="h-4 w-4" />
+              </Button>
             </div>
 
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              onClick={onNextParagraph}
-              disabled={currentParagraphIndex >= totalParagraphs - 1}
-              title="Next paragraph (→)"
-            >
-              <SkipForward className="h-4 w-4" />
-            </Button>
-          </div>
+            {/* Speed */}
+            <DropdownMenu open={speedOpen} onOpenChange={setSpeedOpen}>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center h-7 px-2.5 rounded-md bg-background/40 border border-border text-xs font-semibold tabular-nums hover:bg-background/60 transition-colors focus:outline-none">
+                  {speed}×
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="center" sideOffset={8} className="p-2 z-[70]">
+                <p className="text-[10px] font-semibold text-primary mb-2 px-1">Speed</p>
+                <div className="grid grid-cols-3 gap-1">
+                  {SPEEDS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => { onSpeedChange(s); setSpeedOpen(false); }}
+                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg transition-all ${
+                        speed === s
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "bg-secondary/60 text-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      <span className="text-xs font-semibold tabular-nums leading-tight">{s}×</span>
+                      <span className={`text-[9px] tabular-nums leading-tight ${speed === s ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                        {Math.round(150 * s)}wpm
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          {/* Right — Speed + collapse */}
-          <div className="flex items-center justify-end gap-1">
-            {/* Speed control pill */}
-            <div className="flex items-center rounded-lg bg-background/40 border border-border overflow-hidden">
-              <button
-                onClick={() => canSlower && onSpeedChange(SPEEDS[speedIdx - 1])}
-                disabled={!canSlower}
-                className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-40 font-bold text-base transition-colors"
-              >
-                −
-              </button>
-              <span className="text-foreground text-xs font-mono tabular-nums px-2 border-x border-border select-none">
-                {speed}×
-              </span>
-              <button
-                onClick={() => canFaster && onSpeedChange(SPEEDS[speedIdx + 1])}
-                disabled={!canFaster}
-                className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-40 font-bold text-base transition-colors"
-              >
-                +
-              </button>
-            </div>
-            <span className="text-[9px] text-muted-foreground tabular-nums">{Math.round(150 * speed)} wpm</span>
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-foreground"
-              onClick={() => setExpanded((v) => !v)}
-              title={expanded ? "Collapse" : "Expand word strip"}
-            >
-              {expanded
-                ? <ChevronDown className="h-3.5 w-3.5" />
-                : <ChevronUp   className="h-3.5 w-3.5" />
-              }
-            </Button>
-          </div>
+          </div>{/* end center cluster */}
 
         </div>
       </div>
