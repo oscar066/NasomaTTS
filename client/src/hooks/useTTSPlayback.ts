@@ -30,6 +30,19 @@ import { useDocumentsStore } from "@/store/documents";
 import { prefs } from "@/lib/preferences";
 import { preferencesApi } from "@/lib/api";
 
+// Kokoro (GPU) voice IDs — everything else is routed to the browser Web Speech API.
+const KOKORO_VOICE_IDS = new Set([
+  // American Female
+  "sophia", "luna", "aria", "bella", "zara", "iris", "nina", "nova", "river", "sarah", "sky",
+  // American Male
+  "oscar", "echo", "eli", "thor", "liam", "max", "onyx", "rex",
+  // British Female
+  "alice", "emma", "isabella", "lily",
+  // British Male
+  "daniel", "fable", "george", "lewis",
+]);
+const isKokoroVoice = (id: string) => KOKORO_VOICE_IDS.has(id);
+
 // ── Public types
 
 export interface TTSPlaybackDeps {
@@ -96,8 +109,11 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
   const audioQueueRef = useRef<Map<string, string>>(new Map());
   // Keys currently being fetched (prevents duplicate in-flight requests)
   const fetchingRef   = useRef<Set<string>>(new Set());
+
   // Currently playing HTMLAudioElement
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  // Pre-created Audio element for the next paragraph (eliminates transition gap)
+  const nextAudioRef    = useRef<{ audio: HTMLAudioElement; page: number; para: number; voice: string } | null>(null);
 
   const resumePageRef  = useRef(deps.initialPage ?? 0);
   const currentPageRef = useRef<number>(-1);
@@ -134,6 +150,7 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
         currentAudioRef.current.onerror = null;
         currentAudioRef.current.pause();
       }
+      nextAudioRef.current = null;
       // Release all blob URLs to free memory
       audioQueueRef.current.forEach((url) => URL.revokeObjectURL(url));
       if (typeof window !== "undefined" && window.speechSynthesis) {
@@ -296,7 +313,7 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     voice: string,
     signal?: AbortSignal
   ): Promise<string | null> => {
-    const key = `${pageIdx}:${paraIdx}`;
+    const key = `${pageIdx}:${paraIdx}:${voice}`;
     if (audioQueueRef.current.has(key)) return audioQueueRef.current.get(key)!;
 
     const { docId, token } = depsRef.current;
@@ -323,7 +340,7 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     const { storedPages } = depsRef.current;
     const upcoming = getNextNParagraphs(storedPages, pageIdx, paraIdx, 5);
     for (const [p, q] of upcoming) {
-      const key = `${p}:${q}`;
+      const key = `${p}:${q}:${voice}`;
       if (!audioQueueRef.current.has(key) && !fetchingRef.current.has(key)) {
         fetchingRef.current.add(key);
         fetchParaAudio(p, q, voice)
@@ -368,7 +385,7 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     currentPageRef.current = pageIdx;
     update({
       currentTTSPage: pageIdx,
-      currentParagraphIndex: absoluteIdx,
+      currentParagraphIndex: paraIdx,   // within-page index — PDFViewer uses storedPages[page].paragraphs[pIdx]
       currentWordIndex: -1,
       absoluteWordIdx: -1,
       wordWindow: [],
@@ -378,24 +395,20 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     });
 
     // SSE drives word highlighting — pass no-op onDone so audio controls pacing.
-    openStream(paraText, voice, speed, absoluteIdx, () => {});
+    openStream(paraText, voice, speed, paraIdx, () => {});
 
-    // Server already prefetches the next 5 paragraphs after each /tts/audio
-    // response — no need to fire additional client-side requests here.
+    // Stop any previously playing element before starting the new one.
+    if (currentAudioRef.current) {
+      currentAudioRef.current.onended = null;
+      currentAudioRef.current.onerror = null;
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
 
-    // Fetch and play this paragraph's audio.
     const ac = abortRef.current;
-    fetchParaAudio(pageIdx, paraIdx, voice, ac?.signal ?? undefined).then((audioUrl) => {
-      if (!audioUrl || ac?.signal?.aborted) return;
 
-      // Stop any previously playing element.
-      if (currentAudioRef.current) {
-        currentAudioRef.current.onended = null;
-        currentAudioRef.current.onerror = null;
-        currentAudioRef.current.pause();
-      }
-
-      const audio = new Audio(audioUrl);
+    const startAudio = (audio: HTMLAudioElement) => {
+      if (ac?.signal?.aborted) return;
       audio.playbackRate = stateRef.current.speed;
       currentAudioRef.current = audio;
 
@@ -405,12 +418,39 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
       };
       audio.onerror = () => {
         currentAudioRef.current = null;
-        // Skip broken audio rather than stopping playback entirely.
         playParagraphRef.current?.(pageIdx, paraIdx + 1);
       };
 
       audio.play().catch(() => {});
-    });
+
+      // Pre-create the next paragraph's Audio element so it's decoded and ready.
+      const nextCoords = getNextNParagraphs(storedPages, pageIdx, paraIdx, 1);
+      if (nextCoords.length > 0) {
+        const [np, nq] = nextCoords[0];
+        const makeNext = (url: string) => {
+          if (ac?.signal?.aborted) return;
+          const a = new Audio(url);
+          a.playbackRate = stateRef.current.speed;
+          nextAudioRef.current = { audio: a, page: np, para: nq, voice };
+        };
+        const cached = audioQueueRef.current.get(`${np}:${nq}:${voice}`);
+        if (cached) makeNext(cached);
+        else fetchParaAudio(np, nq, voice).then((url) => { if (url) makeNext(url); });
+      }
+    };
+
+    // Use pre-created Audio element if it matches this paragraph+voice.
+    const preloaded = nextAudioRef.current;
+    nextAudioRef.current = null;
+
+    if (preloaded?.page === pageIdx && preloaded?.para === paraIdx && preloaded?.voice === voice) {
+      startAudio(preloaded.audio);
+    } else {
+      fetchParaAudio(pageIdx, paraIdx, voice, ac?.signal ?? undefined).then((audioUrl) => {
+        if (!audioUrl) return;
+        startAudio(new Audio(audioUrl));
+      });
+    }
   };
 
   playParagraphRef.current = playParagraph;
@@ -436,7 +476,7 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
         error: "",
       });
       openStream(text, voice, speed, 0);
-      if (!ttsAvailable) startBrowserAudio(text, voice, speed);
+      if (!ttsAvailable || !isKokoroVoice(voice)) startBrowserAudio(text, voice, speed);
       return;
     }
 
@@ -452,7 +492,7 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     }
 
     // Kokoro path: play paragraph-by-paragraph with audio queue + look-ahead.
-    if (ttsAvailable && storedPages[idx].paragraphs?.length) {
+    if (ttsAvailable && isKokoroVoice(voice) && storedPages[idx].paragraphs?.length) {
       currentPageRef.current = idx;
       persistProgress(idx);
       playParagraphRef.current?.(idx, 0);
@@ -478,7 +518,8 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     });
 
     persistProgress(idx);
-    openStream(pageText, voice, speed, 0, () => playPageRef.current?.(idx + 1));
+    // SSE drives word highlighting only — browser utterance onEnd controls paging.
+    openStream(pageText, voice, speed, 0, () => {});
     startBrowserAudio(pageText, voice, speed, () => playPageRef.current?.(idx + 1));
   };
 
@@ -507,17 +548,17 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     if (!text.trim()) { update({ error: "No text to read." }); return; }
     update({ error: "", isPlaying: true });
     openStream(text, voice, speed);
-    if (!ttsAvailable) startBrowserAudio(text, voice, speed);
+    if (!ttsAvailable || !isKokoroVoice(voice)) startBrowserAudio(text, voice, speed);
   };
 
   const handleStop = () => {
-    // Stop Kokoro audio element.
     if (currentAudioRef.current) {
       currentAudioRef.current.onended = null;
       currentAudioRef.current.onerror = null;
       currentAudioRef.current.pause();
       currentAudioRef.current = null;
     }
+    nextAudioRef.current = null;
 
     const page = currentPageRef.current;
     if (page >= 0) {
@@ -561,7 +602,7 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     if (isPlaying && voice) {
       const textFromIndex = paragraphs.slice(index).join("\n\n");
       openStream(textFromIndex, voice, speed, index);
-      if (!ttsAvailable) {
+      if (!ttsAvailable || !isKokoroVoice(voice)) {
         if (typeof window !== "undefined") window.speechSynthesis.cancel();
         startBrowserAudio(textFromIndex, voice, speed);
       }
@@ -584,9 +625,11 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     setSpeed: (speed: number) => {
       prefs.setSpeed(speed);
       update({ speed });
-      // Apply new speed to any currently playing audio element immediately.
       if (currentAudioRef.current) {
         currentAudioRef.current.playbackRate = speed;
+      }
+      if (nextAudioRef.current) {
+        nextAudioRef.current.audio.playbackRate = speed;
       }
       const { token } = depsRef.current;
       if (token) preferencesApi.save(null, speed, token).catch(() => {});
