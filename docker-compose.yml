@@ -24,6 +24,25 @@ services:
       - nasoma-network
     restart: always
 
+  # Kokoro TTS sidecar — isolated synthesis service
+  kokoro-tts:
+    build:
+      context: ./backend/kokoro
+      dockerfile: Dockerfile
+    container_name: nasoma_kokoro_prod
+    hostname: nasoma-kokoro
+    volumes:
+      - nasoma_hf_cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8001/health | grep -q 'ok' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    networks:
+      - nasoma-network
+    restart: always
+
   # FastAPI Backend — binds to 127.0.0.1:8001
   api:
     build:
@@ -41,6 +60,7 @@ services:
       - REDIS_URL=redis://nasoma-redis:6379
       - RESEND_API_KEY=${RESEND_API_KEY}
       - FRONTEND_URL=${FRONTEND_URL:-https://me-nasoma.com}
+      - KOKORO_URL=http://nasoma-kokoro:8001
     ports:
       - "127.0.0.1:8001:8000"
     depends_on:
@@ -146,4 +166,6 @@ volumes:
   nasoma_minio_data:
     driver: local
   nasoma_redis_data:
+    driver: local
+  nasoma_hf_cache:
     driver: local

@@ -1,25 +1,30 @@
 /**
  * useTTSPlayback — TTS stream management and playback controls.
  *
- * Single responsibility: open and manage the SSE word-timing stream, drive the
- * browser Web Speech API fallback, and expose play/stop/skip controls.
+ * Single responsibility: open and manage the SSE word-timing stream, drive
+ * audio playback (Kokoro WAV or browser Web Speech API fallback), and expose
+ * play/stop/skip controls.
  *
  * Design notes
  * ────────────
- * - `deps` (document state + active voice) arrive as plain values from the
- *   caller.  A `depsRef` is synchronously updated on every render so that all
- *   internal callbacks always see the latest values without stale closures.
- * - `stateRef` mirrors playback state for the same reason — callbacks like
- *   `openStream`'s async loop and `playPage` need the current speed/isPlaying
- *   even after many re-renders since they started.
- * - `playPageRef` breaks the circular reference between `playPage` and the
- *   `onDone` callback it passes to `openStream`.
- * - Cleanup (abort + browser TTS cancel) is handled inside this hook so the
- *   caller does not need to touch `abortRef` directly.
+ * - When Kokoro TTS is available (`ttsAvailable = true`) and a document has
+ *   paragraph-level data, playback advances paragraph by paragraph rather than
+ *   page by page.  Each paragraph's WAV is fetched from the backend and played
+ *   via an HTMLAudioElement; the SSE stream runs in parallel to drive word
+ *   highlighting.
+ * - A client-side audio queue (`audioQueueRef`) caches blob URLs for already-
+ *   fetched paragraphs.  After each paragraph starts playing, the next 5 are
+ *   prefetched in the background so they are ready before the client needs them.
+ * - `depsRef` and `stateRef` mirror their React counterparts so async callbacks
+ *   always read the latest values without stale closures.
+ * - `playParagraphRef` and `playPageRef` break circular references in onDone /
+ *   onended callbacks that would otherwise capture stale function instances.
+ * - All cleanup (abort, audio pause, blob URL revocation) is centralised in
+ *   `handleStop` and the unmount effect.
  */
 
 import { useState, useRef, useEffect } from "react";
-import { speakStream, documentsApi, StoredPage } from "@/lib/api";
+import { speakStream, fetchParagraphAudio, documentsApi, StoredPage } from "@/lib/api";
 import { saveLocalProgress } from "@/lib/progress";
 import { useDocumentsStore } from "@/store/documents";
 import { prefs } from "@/lib/preferences";
@@ -27,13 +32,9 @@ import { preferencesApi } from "@/lib/api";
 
 // ── Public types
 
-/** Values this hook reads from the wider application state. */
 export interface TTSPlaybackDeps {
-  /** Document ID — used to persist reading progress. */
   docId: string;
-  /** Bearer token — used to authenticate progress saves. */
   token: string | undefined;
-  /** 0-based page to resume playback from on first play. */
   initialPage: number;
   storedPages: StoredPage[];
   text: string;
@@ -80,40 +81,30 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     error: "",
   });
 
-  // Always-current refs — updated synchronously each render so async
-  // callbacks and deferred timers never observe stale values.
   const stateRef = useRef(state);
   stateRef.current = state;
 
   const depsRef = useRef(deps);
   depsRef.current = deps;
 
-  const synthRef    = useRef<SpeechSynthesisUtterance | null>(null);
-  const abortRef    = useRef<AbortController | null>(null);
-  const playPageRef = useRef<((idx: number) => void) | null>(null);
+  const synthRef         = useRef<SpeechSynthesisUtterance | null>(null);
+  const abortRef         = useRef<AbortController | null>(null);
+  const playPageRef      = useRef<((idx: number) => void) | null>(null);
+  const playParagraphRef = useRef<((pageIdx: number, paraIdx: number) => void) | null>(null);
 
-  /**
-   * The page to start/resume from.  Initialised from `deps.initialPage` and
-   * updated whenever the user stops playback mid-document so the next play
-   * resumes from the same spot.
-   */
-  const resumePageRef = useRef(deps.initialPage ?? 0);
+  // Client-side audio queue: `${pageIdx}:${paraIdx}` → blob URL
+  const audioQueueRef = useRef<Map<string, string>>(new Map());
+  // Keys currently being fetched (prevents duplicate in-flight requests)
+  const fetchingRef   = useRef<Set<string>>(new Set());
+  // Currently playing HTMLAudioElement
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  /**
-   * Tracks the page that is *actively being played* — written synchronously
-   * by `playPage` the instant a page starts, so `handleStop` can always read
-   * the true current page without depending on React state (which lags one
-   * render behind).
-   */
+  const resumePageRef  = useRef(deps.initialPage ?? 0);
   const currentPageRef = useRef<number>(-1);
 
-  // When the document loads (initialPage arrives after async fetch), sync the
-  // resume pointer and pre-scroll the PDF viewer to the saved page.
   useEffect(() => {
     const page = deps.initialPage ?? 0;
     resumePageRef.current = page;
-    // Setting currentTTSPage causes PDFViewer to scroll to the saved page
-    // even before the user presses play.
     if (page > 0) update({ currentTTSPage: page });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deps.initialPage]);
@@ -121,12 +112,8 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
   const update = (patch: Partial<PlaybackState>) =>
     setState((prev) => ({ ...prev, ...patch }));
 
-  // Progress persistence 
+  // ── Progress persistence
 
-  /**
-   * Save the current page to both localStorage (instant) and the backend
-   * (cross-device sync, fire-and-forget).  Never throws.
-   */
   const persistProgress = (page: number) => {
     const { docId, token } = depsRef.current;
     if (!docId) return;
@@ -142,6 +129,13 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
+      if (currentAudioRef.current) {
+        currentAudioRef.current.onended = null;
+        currentAudioRef.current.onerror = null;
+        currentAudioRef.current.pause();
+      }
+      // Release all blob URLs to free memory
+      audioQueueRef.current.forEach((url) => URL.revokeObjectURL(url));
       if (typeof window !== "undefined" && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
@@ -190,7 +184,7 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
               if (data.done) {
                 doneSignalled = true;
                 (onDone ?? handleStop)();
-                return true; // signal caller to stop
+                return true;
               }
               if (data.newParagraph) {
                 update({
@@ -217,24 +211,14 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
 
         while (true) {
           const { done, value } = await reader.read();
-
-          // Process any bytes that arrived alongside the close signal —
-          // the Fetch streaming API sometimes delivers the final chunk
-          // in the same read() call that sets done:true.
           if (value?.length) {
             const finished = processChunk(dec.decode(value, { stream: !done }));
             if (finished) return;
           }
-
           if (done) break;
         }
 
-        // Flush any remaining buffered bytes (e.g. a partial SSE frame that
-        // arrived just before the connection closed).
         if (buf.trim()) processChunk("");
-
-        // The stream closed without an explicit data.done event — treat it as
-        // done so playback advances to the next page instead of stopping cold.
         if (!doneSignalled) {
           (onDone ?? handleStop)();
         }
@@ -249,11 +233,6 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
 
   // ── Browser Web Speech API fallback
 
-  /**
-   * `onEnd` overrides the default `handleStop` callback so callers can supply
-   * their own "what to do when audio finishes" logic — e.g. page-advance in
-   * playPage — without triggering a full stop that would abort the SSE stream.
-   */
   const startBrowserAudio = (
     text: string,
     voiceURI: string,
@@ -275,7 +254,168 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     window.speechSynthesis.speak(utterance);
   };
 
-  // ── PDF page-by-page TTS
+  // ── Kokoro paragraph-level audio helpers
+
+  /** Cumulative paragraph index across all preceding pages. */
+  const getAbsoluteParaIdx = (storedPages: StoredPage[], pageIdx: number, paraIdx: number): number => {
+    let abs = 0;
+    for (let p = 0; p < pageIdx; p++) {
+      abs += storedPages[p].paragraphs?.length ?? 1;
+    }
+    return abs + paraIdx;
+  };
+
+  /** Next N paragraph coordinates (page, para) after (pageIdx, paraIdx). */
+  const getNextNParagraphs = (
+    storedPages: StoredPage[],
+    pageIdx: number,
+    paraIdx: number,
+    n: number
+  ): Array<[number, number]> => {
+    const result: Array<[number, number]> = [];
+    let p = pageIdx, q = paraIdx + 1;
+    while (result.length < n && p < storedPages.length) {
+      const paras = storedPages[p].paragraphs ?? [];
+      while (q < paras.length && result.length < n) {
+        result.push([p, q]);
+        q++;
+      }
+      p++;
+      q = 0;
+    }
+    return result;
+  };
+
+  /**
+   * Fetch WAV audio for a paragraph and cache it as a blob URL.
+   * Returns the blob URL, or null if unavailable / aborted.
+   */
+  const fetchParaAudio = async (
+    pageIdx: number,
+    paraIdx: number,
+    voice: string,
+    signal?: AbortSignal
+  ): Promise<string | null> => {
+    const key = `${pageIdx}:${paraIdx}`;
+    if (audioQueueRef.current.has(key)) return audioQueueRef.current.get(key)!;
+
+    const { docId, token } = depsRef.current;
+    if (!docId || !token) return null;
+
+    try {
+      const res = await fetchParagraphAudio(docId, pageIdx, paraIdx, voice, token, signal);
+      if (!res.ok || signal?.aborted) return null;
+      // JSON fallback hint means Kokoro is unavailable
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("audio")) return null;
+      const blob = await res.blob();
+      if (signal?.aborted) return null;
+      const url = URL.createObjectURL(blob);
+      audioQueueRef.current.set(key, url);
+      return url;
+    } catch {
+      return null;
+    }
+  };
+
+  /** Fire-and-forget prefetch of the next 5 paragraphs. */
+  const prefetchAhead = (pageIdx: number, paraIdx: number, voice: string) => {
+    const { storedPages } = depsRef.current;
+    const upcoming = getNextNParagraphs(storedPages, pageIdx, paraIdx, 5);
+    for (const [p, q] of upcoming) {
+      const key = `${p}:${q}`;
+      if (!audioQueueRef.current.has(key) && !fetchingRef.current.has(key)) {
+        fetchingRef.current.add(key);
+        fetchParaAudio(p, q, voice)
+          .finally(() => fetchingRef.current.delete(key));
+      }
+    }
+  };
+
+  // ── Paragraph-level Kokoro playback
+
+  const playParagraph = (pageIdx: number, paraIdx: number) => {
+    const { storedPages, voice } = depsRef.current;
+    const { speed } = stateRef.current;
+
+    const paras = storedPages[pageIdx]?.paragraphs ?? [];
+
+    // No more paragraphs in this page — advance to the next non-empty page.
+    if (paraIdx >= paras.length) {
+      let nextPage = pageIdx + 1;
+      while (nextPage < storedPages.length && !(storedPages[nextPage].paragraphs?.length)) {
+        nextPage++;
+      }
+      if (nextPage >= storedPages.length) {
+        persistProgress(storedPages.length);
+        handleStop();
+        return;
+      }
+      currentPageRef.current = nextPage;
+      persistProgress(nextPage);
+      playParagraphRef.current?.(nextPage, 0);
+      return;
+    }
+
+    const paraText = paras[paraIdx].text?.trim();
+    if (!paraText) {
+      playParagraphRef.current?.(pageIdx, paraIdx + 1);
+      return;
+    }
+
+    const absoluteIdx = getAbsoluteParaIdx(storedPages, pageIdx, paraIdx);
+
+    currentPageRef.current = pageIdx;
+    update({
+      currentTTSPage: pageIdx,
+      currentParagraphIndex: absoluteIdx,
+      currentWordIndex: -1,
+      absoluteWordIdx: -1,
+      wordWindow: [],
+      windowStart: 0,
+      isPlaying: true,
+      error: "",
+    });
+
+    // SSE drives word highlighting — pass no-op onDone so audio controls pacing.
+    openStream(paraText, voice, speed, absoluteIdx, () => {});
+
+    // Server already prefetches the next 5 paragraphs after each /tts/audio
+    // response — no need to fire additional client-side requests here.
+
+    // Fetch and play this paragraph's audio.
+    const ac = abortRef.current;
+    fetchParaAudio(pageIdx, paraIdx, voice, ac?.signal ?? undefined).then((audioUrl) => {
+      if (!audioUrl || ac?.signal?.aborted) return;
+
+      // Stop any previously playing element.
+      if (currentAudioRef.current) {
+        currentAudioRef.current.onended = null;
+        currentAudioRef.current.onerror = null;
+        currentAudioRef.current.pause();
+      }
+
+      const audio = new Audio(audioUrl);
+      audio.playbackRate = stateRef.current.speed;
+      currentAudioRef.current = audio;
+
+      audio.onended = () => {
+        currentAudioRef.current = null;
+        playParagraphRef.current?.(pageIdx, paraIdx + 1);
+      };
+      audio.onerror = () => {
+        currentAudioRef.current = null;
+        // Skip broken audio rather than stopping playback entirely.
+        playParagraphRef.current?.(pageIdx, paraIdx + 1);
+      };
+
+      audio.play().catch(() => {});
+    });
+  };
+
+  playParagraphRef.current = playParagraph;
+
+  // ── PDF page-by-page TTS (Kokoro paragraphs or browser fallback)
 
   const playPage = (startIdx: number) => {
     const { storedPages, voice, ttsAvailable, text } = depsRef.current;
@@ -306,23 +446,26 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
       idx++;
     }
     if (idx >= storedPages.length) {
-      // All pages read — mark document as 100 % complete.
       persistProgress(storedPages.length);
       handleStop();
       return;
     }
 
-    // Use paragraph-structured text when available so the SSE paragraphIndex
-    // events align exactly with storedPages[idx].paragraphs.
+    // Kokoro path: play paragraph-by-paragraph with audio queue + look-ahead.
+    if (ttsAvailable && storedPages[idx].paragraphs?.length) {
+      currentPageRef.current = idx;
+      persistProgress(idx);
+      playParagraphRef.current?.(idx, 0);
+      return;
+    }
+
+    // Browser TTS fallback: play the full page as a single block.
     const pageData = storedPages[idx];
     const pageText = pageData.paragraphs?.length
       ? pageData.paragraphs.map((p) => p.text).join("\n\n")
       : pageData.text;
 
-    // Write synchronously so handleStop always knows which page is active,
-    // even before the React state update (setState) has re-rendered.
     currentPageRef.current = idx;
-
     update({
       currentTTSPage: idx,
       currentParagraphIndex: -1,
@@ -334,34 +477,18 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
       error: "",
     });
 
-    // Save progress each time a new page starts playing.
     persistProgress(idx);
-
-    if (ttsAvailable) {
-      // Server TTS: SSE stream provides both audio and word-timing events.
-      // Let the stream's done-signal drive page advancement.
-      openStream(pageText, voice, speed, 0, () => playPageRef.current?.(idx + 1));
-    } else {
-      // Browser TTS fallback: SSE stream provides only word-timing events
-      // (no audio); the browser utterance handles audio.  Wire page-advance
-      // to the utterance's `onend` so it fires when audio actually finishes.
-      // Pass a no-op onDone to SSE so an early stream-close doesn't trigger
-      // handleStop() and abort the utterance mid-sentence.
-      openStream(pageText, voice, speed, 0, () => {});
-      startBrowserAudio(pageText, voice, speed, () => playPageRef.current?.(idx + 1));
-    }
+    openStream(pageText, voice, speed, 0, () => playPageRef.current?.(idx + 1));
+    startBrowserAudio(pageText, voice, speed, () => playPageRef.current?.(idx + 1));
   };
 
-  // Keep the ref current so the onDone callback in openStream always calls
-  // the latest version of playPage (avoids stale closure on page advance).
   playPageRef.current = playPage;
 
   // ── Playback controls
 
   const handlePlay = () => {
-    const { voice }                         = depsRef.current;
-    const { pdfUrl, storedPages, text, ttsAvailable } = depsRef.current;
-    const { speed }                         = stateRef.current;
+    const { voice, pdfUrl, storedPages, text, ttsAvailable } = depsRef.current;
+    const { speed } = stateRef.current;
 
     if (!voice) {
       update({ error: "Please select a voice before playing." });
@@ -373,7 +500,6 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
         update({ error: "PDF is still loading — please wait a moment." });
         return;
       }
-      // Resume from the last saved page (or 0 for a fresh start).
       playPage(resumePageRef.current);
       return;
     }
@@ -385,8 +511,14 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
   };
 
   const handleStop = () => {
-    // currentPageRef is written synchronously by playPage so it is always
-    // up-to-date regardless of whether React has re-rendered yet.
+    // Stop Kokoro audio element.
+    if (currentAudioRef.current) {
+      currentAudioRef.current.onended = null;
+      currentAudioRef.current.onerror = null;
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+
     const page = currentPageRef.current;
     if (page >= 0) {
       resumePageRef.current = page;
@@ -452,6 +584,10 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
     setSpeed: (speed: number) => {
       prefs.setSpeed(speed);
       update({ speed });
+      // Apply new speed to any currently playing audio element immediately.
+      if (currentAudioRef.current) {
+        currentAudioRef.current.playbackRate = speed;
+      }
       const { token } = depsRef.current;
       if (token) preferencesApi.save(null, speed, token).catch(() => {});
     },

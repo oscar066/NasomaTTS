@@ -23,10 +23,12 @@ POST /tts/audio     — Return synthesised WAV audio for the given text.
 import asyncio
 import json
 
-from fastapi import APIRouter, HTTPException, Request
+from beanie import PydanticObjectId
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
+from ..models.document import NasomaDocument
 from ..services.tts import tts_service
 from ..utils.logger import setup_logger
 
@@ -167,31 +169,104 @@ async def speak(request: Request, payload: SpeakRequest):
 
 
 @router.post("/tts/audio")
-async def generate_audio(text: str, voice: str = "dave"):
-    """Synthesise and return WAV audio for the given text using NeuTTS.
+async def generate_audio(text: str, voice: str = "sophia"):
+    """Synthesise and return WAV audio for the given text.
 
-    When NeuTTS is unavailable (model not loaded or missing sample files) the
-    endpoint returns a JSON hint telling the client to fall back to the Web
-    Speech API instead of raising an error.
-
-    Args:
-        text: The text to synthesise.
-        voice: Voice ID to use (must match a key in ``PRESET_VOICES``).
-
-    Returns:
-        A ``audio/wav`` binary response, or a JSON fallback hint.
-
-    Raises:
-        HTTPException 500: If NeuTTS is available but synthesis returns no data.
+    Returns a JSON fallback hint when the Kokoro sidecar is unavailable so the
+    client can fall back to the browser's Web Speech API automatically.
     """
     if not tts_service.available:
-        logger.info("TTS audio requested but NeuTTS unavailable — returning fallback hint")
+        logger.info("TTS audio requested but Kokoro unavailable — returning fallback hint")
         return {"tts_available": False, "fallback": "web_speech_api"}
 
     audio_bytes = await tts_service.synthesize(text, voice)
     if audio_bytes is None:
-        logger.error("TTS synthesis returned None for voice=%s", voice)
         raise HTTPException(status_code=500, detail="Audio generation failed")
 
     logger.info("TTS audio generated: voice=%s bytes=%d", voice, len(audio_bytes))
     return Response(content=audio_bytes, media_type="audio/wav")
+
+
+@router.get("/tts/audio/{doc_id}")
+async def paragraph_audio(
+    doc_id: str,
+    page: int = Query(..., ge=0),
+    para: int = Query(..., ge=0),
+    voice: str = Query("sophia"),
+):
+    """Return synthesised WAV for a specific paragraph in a stored document.
+
+    Checks the in-memory cache first (instant on a cache hit).  On a miss,
+    synthesises via the Kokoro sidecar and caches the result.  After serving
+    the requested paragraph, schedules background synthesis of the next 5
+    paragraphs (across page boundaries) so they are ready before the client
+    asks for them.
+
+    Args:
+        doc_id:  MongoDB document ID.
+        page:    0-based page index within ``doc.pages``.
+        para:    0-based paragraph index within that page's ``paragraphs`` list.
+        voice:   Voice ID (``sophia`` or ``adam``).
+
+    Returns:
+        ``audio/wav`` binary, or a JSON fallback hint when Kokoro is unavailable.
+    """
+    if not tts_service.available:
+        return {"tts_available": False, "fallback": "web_speech_api"}
+
+    try:
+        doc = await NasomaDocument.get(PydanticObjectId(doc_id))
+    except Exception:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if not doc or not doc.pages:
+        raise HTTPException(status_code=404, detail="Document not found or has no page data")
+
+    if page >= len(doc.pages):
+        raise HTTPException(status_code=400, detail="Page index out of range")
+
+    page_data = doc.pages[page]
+    paragraphs = page_data.get("paragraphs") or []
+
+    if not paragraphs:
+        # Fallback: treat the whole page text as a single paragraph.
+        text = page_data.get("text", "").strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="Page has no speakable content")
+        paragraphs = [{"text": text}]
+
+    if para >= len(paragraphs):
+        raise HTTPException(status_code=400, detail="Paragraph index out of range")
+
+    text = paragraphs[para]["text"]
+    wav = await tts_service.synthesize_paragraph(doc_id, page, para, text, voice)
+
+    if wav is None:
+        raise HTTPException(status_code=500, detail="Audio generation failed")
+
+    # Schedule prefetch of the next 5 paragraphs across page boundaries.
+    upcoming: list[tuple[int, int, str]] = []
+    p, q = page, para + 1
+    while len(upcoming) < 5 and p < len(doc.pages):
+        page_paras = doc.pages[p].get("paragraphs") or []
+        if not page_paras:
+            p += 1
+            q = 0
+            continue
+        while q < len(page_paras) and len(upcoming) < 5:
+            if not tts_service.is_cached(doc_id, p, q, voice):
+                upcoming.append((p, q, page_paras[q]["text"]))
+            q += 1
+        p += 1
+        q = 0
+
+    if upcoming:
+        tts_service.schedule_prefetch(doc_id, upcoming, voice)
+        logger.debug("Prefetch scheduled: %d paragraphs after %s p%d:q%d", len(upcoming), doc_id, page, para)
+
+    logger.info("Para audio: doc=%s page=%d para=%d voice=%s bytes=%d", doc_id, page, para, voice, len(wav))
+    return Response(
+        content=wav,
+        media_type="audio/wav",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )

@@ -37,6 +37,31 @@ services:
         - action: rebuild
           path: ./client/package.json
 
+  # Kokoro TTS sidecar — isolated synthesis service
+  kokoro-tts:
+    build:
+      context: ./backend/kokoro
+      dockerfile: Dockerfile
+    container_name: nasoma_kokoro_dev
+    hostname: nasoma-kokoro
+    volumes:
+      - nasoma_hf_cache:/root/.cache/huggingface
+    ports:
+      - "8002:8001"          # exposed locally for direct testing
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8001/health | grep -q 'ok' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    networks:
+      - nasoma-network
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./backend/kokoro/main.py
+          target: /app/main.py
+
   # FastAPI Backend — uvicorn with --reload
   api:
     build:
@@ -55,6 +80,7 @@ services:
       - REDIS_URL=redis://nasoma-redis:6379
       - RESEND_API_KEY=${RESEND_API_KEY}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3001}
+      - KOKORO_URL=http://nasoma-kokoro:8001
     volumes:
       - ./backend/fastapi:/app
     ports:
@@ -174,4 +200,6 @@ volumes:
   nasoma_minio_data:
     driver: local
   nasoma_redis_data:
+    driver: local
+  nasoma_hf_cache:
     driver: local

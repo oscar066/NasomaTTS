@@ -34,6 +34,7 @@ async def lifespan(app: FastAPI):
     await close_db()
     await close_cache()
     await arq_pool.close()
+    await tts_service.close()
 
 
 app = FastAPI(

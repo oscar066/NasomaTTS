@@ -314,3 +314,29 @@ export function speakStream(
     signal,
   });
 }
+
+// ── Paragraph audio (GET → WAV bytes from Kokoro sidecar)
+
+/**
+ * Fetch synthesized WAV audio for a specific paragraph in a stored document.
+ * Returns the raw fetch Response so the caller can check status before
+ * creating a blob URL — avoids holding large audio buffers in memory.
+ */
+export function fetchParagraphAudio(
+  docId: string,
+  page: number,
+  para: number,
+  voice: string,
+  token: string,
+  signal?: AbortSignal
+): Promise<Response> {
+  const params = new URLSearchParams({
+    page: String(page),
+    para: String(para),
+    voice,
+  });
+  return fetch(`${BASE}/tts/audio/${docId}?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal,
+  });
+}
