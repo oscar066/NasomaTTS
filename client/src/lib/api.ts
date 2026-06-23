@@ -268,6 +268,9 @@ export const pdfApi = {
 export interface Voice {
   id: string;
   label: string;
+  tier?: "premium" | "standard";
+  icon?: string;
+  group?: string;
 }
 
 export const voicesApi = {
