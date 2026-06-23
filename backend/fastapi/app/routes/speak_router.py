@@ -244,16 +244,16 @@ async def paragraph_audio(
     if wav is None:
         raise HTTPException(status_code=500, detail="Audio generation failed")
 
-    # Schedule prefetch of the next 5 paragraphs across page boundaries.
+    # Schedule prefetch of the next 3 paragraphs across page boundaries.
     upcoming: list[tuple[int, int, str]] = []
     p, q = page, para + 1
-    while len(upcoming) < 5 and p < len(doc.pages):
+    while len(upcoming) < 3 and p < len(doc.pages):
         page_paras = doc.pages[p].get("paragraphs") or []
         if not page_paras:
             p += 1
             q = 0
             continue
-        while q < len(page_paras) and len(upcoming) < 5:
+        while q < len(page_paras) and len(upcoming) < 3:
             if not tts_service.is_cached(doc_id, p, q, voice):
                 upcoming.append((p, q, page_paras[q]["text"]))
             q += 1
@@ -262,7 +262,7 @@ async def paragraph_audio(
 
     if upcoming:
         tts_service.schedule_prefetch(doc_id, upcoming, voice)
-        logger.debug("Prefetch scheduled: %d paragraphs after %s p%d:q%d", len(upcoming), doc_id, page, para)
+        logger.debug("Prefetch scheduled: %d para(s) after %s p%d:q%d", len(upcoming), doc_id, page, para)
 
     logger.info("Para audio: doc=%s page=%d para=%d voice=%s bytes=%d", doc_id, page, para, voice, len(wav))
     return Response(
