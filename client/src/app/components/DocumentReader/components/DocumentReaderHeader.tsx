@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { ChevronLeft, Pencil, Check, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowLeft, Pencil, Check, X } from "lucide-react";
 import NasomaLogo from "../../Logo/nasoma-logo";
 
 interface DocumentReaderHeaderProps {
@@ -57,16 +56,13 @@ const DocumentReaderHeader: React.FC<DocumentReaderHeaderProps> = ({
 
       {/* Left — back + logo */}
       <div className="flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground hover:text-foreground -ml-1 flex-shrink-0"
+        <button
           onClick={onBack}
+          className="flex items-center gap-1.5 h-8 pl-2 pr-3 rounded-full border border-border/60 bg-secondary/40 text-sm text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all"
         >
-          <ChevronLeft className="h-4 w-4 mr-1" />
-          Back
-        </Button>
-        <div className="w-px h-5 bg-border" />
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span className="font-medium text-xs">Back</span>
+        </button>
         <NasomaLogo size="sm" />
       </div>
 
@@ -117,19 +113,41 @@ const DocumentReaderHeader: React.FC<DocumentReaderHeaderProps> = ({
 
       {/* Right — page counter + playing badge */}
       <div className="flex items-center gap-3">
-        {totalPages > 0 && (
-          <div className="flex items-center gap-1 text-xs font-mono tabular-nums text-muted-foreground">
-            <span className="text-foreground font-semibold">
-              {Math.max(1, (currentPage >= 0 ? currentPage : 0) + 1)}
-            </span>
-            <span>/</span>
-            <span>{totalPages}</span>
-          </div>
-        )}
+        {totalPages > 0 && (() => {
+          const page = Math.max(1, (currentPage >= 0 ? currentPage : 0) + 1);
+          const pct  = Math.round((page / totalPages) * 100);
+          return (
+            <div className="relative flex items-center h-6 rounded-full border border-border bg-secondary/40 overflow-hidden px-3 min-w-[72px]">
+              {/* Progress fill */}
+              <div
+                className="absolute inset-0 bg-primary/15 rounded-full transition-all duration-500"
+                style={{ width: `${pct}%` }}
+              />
+              {/* Label */}
+              <span className="relative text-[11px] font-semibold tabular-nums text-foreground w-full text-center whitespace-nowrap">
+                {page} <span className="text-muted-foreground font-normal">/ {totalPages}</span>
+              </span>
+            </div>
+          );
+        })()}
         {isPlaying && (
-          <div className="flex items-center gap-1.5 text-xs text-primary font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            Playing
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20">
+            {/* Equalizer bars */}
+            <div className="flex items-end gap-[2px] h-3">
+              {[
+                { h: "h-1.5", delay: "0ms"   },
+                { h: "h-3",   delay: "150ms"  },
+                { h: "h-2",   delay: "75ms"   },
+                { h: "h-1",   delay: "225ms"  },
+              ].map(({ h, delay }, i) => (
+                <span
+                  key={i}
+                  className={`w-[2px] ${h} bg-primary rounded-full animate-bounce`}
+                  style={{ animationDelay: delay }}
+                />
+              ))}
+            </div>
+            <span className="text-[11px] font-semibold text-primary tracking-wide">Playing</span>
           </div>
         )}
       </div>

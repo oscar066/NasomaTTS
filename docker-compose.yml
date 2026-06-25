@@ -19,7 +19,8 @@ services:
     ports:
       - "127.0.0.1:3001:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     networks:
       - nasoma-network
     restart: always
@@ -41,6 +42,7 @@ services:
       - REDIS_URL=redis://nasoma-redis:6379
       - RESEND_API_KEY=${RESEND_API_KEY}
       - FRONTEND_URL=${FRONTEND_URL:-https://me-nasoma.com}
+      - KOKORO_URL={KOKORO_URL}
     ports:
       - "127.0.0.1:8001:8000"
     depends_on:
@@ -50,6 +52,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - nasoma-network
     restart: always

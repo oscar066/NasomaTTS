@@ -13,6 +13,7 @@ import AIActionsSidebar      from "./components/AIActionsSidebar";
 import { useDocumentReader } from "@/hooks/useDocumentReader";
 import { documentsApi }      from "@/lib/api";
 import { useDocumentsStore } from "@/store/documents";
+import { useSession }        from "next-auth/react";
 
 const PDFViewer = dynamic(() => import("./components/PDFViewer"), {
   ssr: false,
@@ -34,6 +35,8 @@ const HEADER_HEIGHT  = 56;
 
 const DocumentReader: React.FC = () => {
   const router = useRouter();
+  const { data: session } = useSession();
+  const userPlan = session?.user?.plan ?? "free";
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const { updateDocument } = useDocumentsStore();
 
@@ -55,6 +58,7 @@ const DocumentReader: React.FC = () => {
       voices,
       isPlaying,
       speed,
+      totalWordCount,
       loading,
       error,
       currentTTSPage,
@@ -83,12 +87,7 @@ const DocumentReader: React.FC = () => {
     pageEl?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  // Three triggers that should scroll the viewer to the active TTS page:
-  //   1. `currentTTSPage` changes  → page advance during playback
-  //   2. `pdfLoaded` becomes true  → PDF just loaded; scroll to saved resume page
-  //   3. `isPlaying` becomes true  → user pressed play while already on the
-  //                                  saved page (page index didn't change, so
-  //                                  `currentTTSPage` alone wouldn't re-fire)
+  // Scroll to the active TTS page on page advance, initial load, and play.
   useEffect(() => {
     scrollToTTSPage(currentTTSPage);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -141,7 +140,7 @@ const DocumentReader: React.FC = () => {
         </div>
 
         {/* Fake playback bar */}
-        <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur px-6 py-4 flex flex-col gap-3">
+        <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur px-6 py-4 flex flex-col gap-3">
           <div className="w-full h-1 rounded-full bg-muted animate-pulse" />
           <div className="flex items-center justify-center gap-4">
             <div className="w-8 h-8 rounded-full bg-muted animate-pulse" />
@@ -219,11 +218,12 @@ const DocumentReader: React.FC = () => {
         )}
       </main>
 
-      <AIActionsSidebar onOpenChange={setAiPanelOpen} />
+      <AIActionsSidebar onOpenChange={setAiPanelOpen} userPlan={userPlan} />
 
       <TTSOverlay
         isPlaying={isPlaying}
         aiPanelOpen={aiPanelOpen}
+        userPlan={userPlan}
         currentParagraphIndex={overlayParagraphIndex}
         totalParagraphs={overlayTotalParagraphs}
         currentWordIndex={currentWordIndex}
@@ -232,6 +232,8 @@ const DocumentReader: React.FC = () => {
         voice={voice}
         voices={voices}
         speed={speed}
+        totalWordCount={totalWordCount}
+        skipUnit={isPdfMode ? "page" : "paragraph"}
         onPlay={handlePlay}
         onStop={handleStop}
         onPrevParagraph={() => skipToParagraph(overlayParagraphIndex - 1)}

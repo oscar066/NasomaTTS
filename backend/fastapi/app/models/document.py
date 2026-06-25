@@ -10,7 +10,8 @@ class NasomaDocument(Document):
     content: str
     pdf_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
-    pages: Optional[list] = None
+    page_count: Optional[int] = None
+    total_word_count: Optional[int] = None
     current_page: int = 0
     reading_status: Optional[str] = None
     author: PydanticObjectId

@@ -11,7 +11,8 @@ from slowapi.middleware import SlowAPIMiddleware
 from .utils.cache import close_cache, connect_cache
 from .utils.config import settings
 from .utils.rate_limit import limiter
-from .db.database import close_db, connect_db
+from .db.database import close_db, connect_db, get_db
+from .migrations.runner import run_migrations
 from .routes import admin_router, auth_router, documents_router, pdf_router, speak_router, voices_router
 from .services.tts import tts_service
 from .utils.logger import setup_logger
@@ -24,6 +25,7 @@ logger = setup_logger("nasoma.app")
 async def lifespan(app: FastAPI):
     logger.info("Starting up NasomaTTS API")
     await connect_db()
+    await run_migrations(get_db())
     await connect_cache(settings.redis_url)
     await tts_service.load()
     arq_pool = await create_pool(RedisSettings.from_dsn(settings.redis_url))
@@ -34,6 +36,7 @@ async def lifespan(app: FastAPI):
     await close_db()
     await close_cache()
     await arq_pool.close()
+    await tts_service.close()
 
 
 app = FastAPI(

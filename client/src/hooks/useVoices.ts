@@ -1,8 +1,8 @@
 /**
  * useVoices — voice catalogue loading.
  *
- * Fetches voices once and stores them in the global VoicesStore so subsequent
- * DocumentReader mounts skip the network round-trip entirely.
+ * Always returns both Premium (Kokoro GPU) voices and Standard (browser native)
+ * voices so the user can switch between them from the overlay selector.
  */
 
 import { useCallback, useRef } from "react";
@@ -21,7 +21,7 @@ export interface VoicesResult {
 const getBrowserVoices = (): Voice[] => {
   if (typeof window === "undefined" || !window.speechSynthesis) return [];
   const bv = window.speechSynthesis.getVoices();
-  if (bv.length === 0) return [{ id: "browser-default", label: "Browser TTS" }];
+  if (bv.length === 0) return [{ id: "browser-default", label: "Browser TTS", tier: "standard" }];
 
   const seen = new Set<string>();
   return bv
@@ -30,7 +30,7 @@ const getBrowserVoices = (): Voice[] => {
       seen.add(v.voiceURI);
       return true;
     })
-    .map((v) => ({ id: v.voiceURI, label: v.name }));
+    .map((v) => ({ id: v.voiceURI, label: v.name, tier: "standard" as const }));
 };
 
 export const useVoices = (token?: string): VoicesResult => {
@@ -45,45 +45,50 @@ export const useVoices = (token?: string): VoicesResult => {
 
     const tk = runtimeToken ?? tokenRef.current;
 
-    // 1. Prefer server-side NeuTTS voices.
+    let premiumVoices: Voice[] = [];
+    let serverAvailable = false;
+
+    // 1. Try to get server-side Kokoro voices.
     try {
       const { voices: serverVoices, tts_available } = await voicesApi.list();
       if (tts_available && serverVoices.length > 0) {
-        setVoices(serverVoices, true);
+        serverAvailable = true;
+        premiumVoices = serverVoices.map((v) => ({ ...v, tier: "premium" as const }));
 
-        // Load server preference and override localStorage if found.
+        // Restore server-saved voice preference.
         if (tk) {
           try {
             const { pref_voice, pref_speed } = await preferencesApi.load(tk);
             if (pref_voice) {
-              const matched = serverVoices.find((v) => v.id === pref_voice);
+              const matched = premiumVoices.find((v) => v.id === pref_voice);
               if (matched) { prefs.setVoice(pref_voice); setVoice(pref_voice); }
             }
             if (pref_speed != null) prefs.setSpeed(pref_speed);
           } catch {}
         }
-        return;
       }
     } catch {
-      // Server unavailable — fall through to browser TTS.
+      // Server unavailable — premium voices stay empty.
     }
 
-    // 2. Browser Web Speech API fallback.
-    const loadBrowser = () => {
-      const bv = getBrowserVoices();
-      setVoices(bv, false);
+    // 2. Always merge in browser native voices as Standard.
+    const merge = (browserVoices: Voice[]) => {
+      setVoices([...premiumVoices, ...browserVoices], serverAvailable);
     };
 
     if (typeof window !== "undefined" && window.speechSynthesis) {
       if (window.speechSynthesis.getVoices().length > 0) {
-        loadBrowser();
+        merge(getBrowserVoices());
       } else {
         window.speechSynthesis.onvoiceschanged = () => {
-          loadBrowser();
+          merge(getBrowserVoices());
           window.speechSynthesis.onvoiceschanged = null;
         };
-        setTimeout(loadBrowser, 1000);
+        setTimeout(() => merge(getBrowserVoices()), 1000);
       }
+    } else {
+      // No browser TTS — just set whatever we got from the server.
+      setVoices(premiumVoices, serverAvailable);
     }
   }, [fetched, setVoices, setVoice]);
 

@@ -1,161 +1,169 @@
 """
-NeuTTS text-to-speech service.
+Kokoro TTS service client.
 
-Wraps the NeuTTS Air model to provide voice cloning-based speech synthesis.
-The service loads at application startup and degrades gracefully when the
-model or its dependencies are unavailable — in that case the client falls back
-to the browser's Web Speech API automatically.
-
-Voice presets are defined in the ``PRESET_VOICES`` mapping.  Adding a new
-voice requires only a ``<name>.wav`` reference audio file and a ``<name>.txt``
-transcript in the ``samples/`` directory.
+Talks to the Kokoro endpoint over HTTP.  Owns an in-memory LRU audio cache
+keyed by (doc_id, page, para, voice) so repeated requests for the same
+paragraph are instant.  Background prefetch is fired as asyncio tasks so
+upcoming paragraphs are usually cached before the client asks for them.
 """
 
 import asyncio
-import io
-from pathlib import Path
+import collections
 from typing import Optional
 
+import httpx
+
+from ..utils.config import settings
 from ..utils.logger import setup_logger
+from .voices import VOICE_REGISTRY
 
 logger = setup_logger("nasoma.services.tts")
 
-# Absolute path to the voice sample files, resolved relative to this module.
-SAMPLES_DIR = Path(__file__).parent.parent.parent / "samples"
-
-# Preset voice registry.  Each entry maps a voice ID to its reference audio
-# file and the transcript of that audio (required by NeuTTS for cloning).
-# Add more entries here and place matching files in ``samples/`` to extend.
-PRESET_VOICES: dict[str, dict] = {
-    "dave": {
-        "label": "Dave",
-        "audio": SAMPLES_DIR / "dave.wav",
-        "text": SAMPLES_DIR / "dave.txt",
-    },
-}
+_CACHE_MAX = 100  # Maximum number of synthesized paragraphs kept in memory.
 
 
-class TTSService:
-    """Singleton service that manages the NeuTTS Air model lifecycle.
-
-    Attributes:
-        _tts: The loaded NeuTTS instance, or ``None`` if unavailable.
-        _ref_codes: Encoded reference audio tensors keyed by voice ID.
-        _ref_texts: Reference transcripts keyed by voice ID — required by the
-            NeuTTS cloning algorithm alongside the encoded audio.
-    """
+class KokoroService:
+    """HTTP client to the Kokoro TTS sidecar, with LRU paragraph cache."""
 
     def __init__(self):
-        self._tts = None
-        self._ref_codes: dict = {}
-        self._ref_texts: dict = {}
+        self._client: Optional[httpx.AsyncClient] = None
+        self._cache: collections.OrderedDict[str, bytes] = collections.OrderedDict()
+        self._available = False
+        self._prefetch_tasks: set[asyncio.Task] = set()
+        self._inflight: set[str] = set()  # Keys currently being synthesized
 
     async def load(self) -> None:
-        """Load the NeuTTS Air model and encode all preset voice references.
-
-        Runs the blocking model-loading code in a thread pool executor so it
-        does not block the asyncio event loop during startup.
-
-        If NeuTTS or its dependencies (e.g. ``neutts``, ``soundfile``) are not
-        installed, or if model weights cannot be downloaded, the method logs a
-        warning and sets ``_tts = None``.  All subsequent calls to
-        :meth:`synthesize` will return ``None``, and :attr:`available` will be
-        ``False``, triggering the browser TTS fallback on the client.
-        """
-        try:
-            from neutts import NeuTTS
-
-            loop = asyncio.get_event_loop()
-
-            # Loading the model is CPU-bound and can take several seconds —
-            # run it in an executor to avoid blocking the event loop.
-            self._tts = await loop.run_in_executor(
-                None,
-                lambda: NeuTTS(
-                    backbone_repo="neuphonic/neutts-air-q4-gguf",
-                    backbone_device="cpu",
-                    codec_repo="neuphonic/neucodec",
-                    codec_device="cpu",
-                ),
-            )
-
-            # Pre-encode each preset voice's reference audio so synthesis
-            # requests don't pay the encoding cost at runtime.
-            for voice_id, info in PRESET_VOICES.items():
-                if not info["audio"].exists() or not info["text"].exists():
-                    logger.warning(
-                        "Sample files missing for voice '%s' — skipping", voice_id
+        """Connect to the Kokoro sidecar, retrying until it is ready."""
+        self._client = httpx.AsyncClient(
+            base_url=settings.kokoro_url,
+            timeout=httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0),
+        )
+        for attempt in range(6):
+            try:
+                resp = await self._client.get("/health")
+                if resp.status_code == 200:
+                    self._available = True
+                    data = resp.json()
+                    logger.info(
+                        "Kokoro TTS connected at %s — status=%s",
+                        settings.kokoro_url,
+                        data.get("status"),
                     )
-                    continue
+                    return
+            except Exception as exc:
+                logger.info("Kokoro not ready (attempt %d/6): %s", attempt + 1, exc)
+            if attempt < 5:
+                await asyncio.sleep(5)
+        logger.warning("Kokoro TTS unreachable after retries. Falling back to browser Web Speech API.")
+        self._available = False
 
-                ref_text = info["text"].read_text().strip()
-                ref_codes = await loop.run_in_executor(
-                    None,
-                    lambda p=info["audio"]: self._tts.encode_reference(str(p)),
-                )
-                self._ref_codes[voice_id] = ref_codes
-                self._ref_texts[voice_id] = ref_text
-
-            logger.info("NeuTTS Air loaded. Available voices: %s", list(self._ref_codes))
-
-        except Exception as exc:
-            logger.warning(
-                "NeuTTS Air unavailable (%s). Falling back to Web Speech API on the client.",
-                exc,
-            )
-            self._tts = None
+    async def close(self) -> None:
+        if self._client:
+            await self._client.aclose()
 
     @property
     def available(self) -> bool:
-        """``True`` if the model is loaded and at least one voice is ready."""
-        return self._tts is not None and bool(self._ref_codes)
+        return self._available
 
     def list_voices(self) -> list[dict]:
-        """Return the list of available voices as ``[{"id": ..., "label": ...}]``."""
         return [
-            {"id": vid, "label": PRESET_VOICES[vid]["label"]}
-            for vid in self._ref_codes
+            {
+                "id":    vid,
+                "label": info["label"],
+                "icon":  info.get("icon", ""),
+                "group": info.get("group", ""),
+            }
+            for vid, info in VOICE_REGISTRY.items()
         ]
 
-    async def synthesize(self, text: str, voice_id: str = "dave") -> Optional[bytes]:
-        """Synthesise speech and return WAV audio bytes.
+    # ── Cache helpers
 
-        Falls back to the first available voice if ``voice_id`` is not found
-        in the loaded presets rather than raising an error.
+    def _key(self, doc_id: str, page: int, para: int, voice: str) -> str:
+        return f"{doc_id}:{page}:{para}:{voice}"
 
-        Args:
-            text: The text to convert to speech.
-            voice_id: ID of the preset voice to use for cloning.
+    def _cache_get(self, key: str) -> Optional[bytes]:
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        return None
 
-        Returns:
-            WAV audio as ``bytes``, or ``None`` if NeuTTS is unavailable.
-        """
-        if not self.available:
+    def _cache_set(self, key: str, data: bytes) -> None:
+        self._cache[key] = data
+        self._cache.move_to_end(key)
+        while len(self._cache) > _CACHE_MAX:
+            self._cache.popitem(last=False)
+
+    def is_cached(self, doc_id: str, page: int, para: int, voice: str) -> bool:
+        return self._key(doc_id, page, para, voice) in self._cache
+
+    # ── Synthesis
+
+    async def synthesize(self, text: str, voice: str = "sophia") -> Optional[bytes]:
+        """Call the Kokoro sidecar and return WAV bytes, or None on failure."""
+        if not self._available or not self._client:
+            return None
+        kokoro_id = VOICE_REGISTRY.get(voice, {}).get("kokoro_id", "af_heart")
+        try:
+            resp = await self._client.post(
+                "/v1/audio/speech",
+                json={
+                    "model": "kokoro",
+                    "input": text,
+                    "voice": kokoro_id,
+                    "response_format": "wav",
+                },
+            )
+            if resp.status_code == 200:
+                return resp.content
+            logger.error("Kokoro /v1/audio/speech returned %s: %s", resp.status_code, resp.text[:200])
+            return None
+        except Exception as exc:
+            logger.error("Kokoro synthesis error: %s", exc)
             return None
 
-        # Fall back to the first loaded voice rather than failing outright when
-        # an unknown voice ID is requested.
-        if voice_id not in self._ref_codes:
-            voice_id = next(iter(self._ref_codes))
+    async def synthesize_paragraph(
+        self,
+        doc_id: str,
+        page: int,
+        para: int,
+        text: str,
+        voice: str = "sophia",
+    ) -> Optional[bytes]:
+        """Synthesize a paragraph, serving from cache when available."""
+        key = self._key(doc_id, page, para, voice)
+        hit = self._cache_get(key)
+        if hit is not None:
+            logger.debug("Cache hit: %s", key)
+            return hit
+        wav = await self.synthesize(text, voice)
+        if wav:
+            self._cache_set(key, wav)
+        return wav
 
-        ref_codes = self._ref_codes[voice_id]
-        ref_text = self._ref_texts[voice_id]
+    # ── Background prefetch
 
-        loop = asyncio.get_event_loop()
+    def schedule_prefetch(
+        self,
+        doc_id: str,
+        upcoming: list[tuple[int, int, str]],  # [(page, para, text), ...]
+        voice: str,
+    ) -> None:
+        """Fire-and-forget: synthesize upcoming paragraphs into the cache."""
+        async def _run():
+            for page, para, text in upcoming:
+                key = self._key(doc_id, page, para, voice)
+                if key in self._cache or key in self._inflight:
+                    continue
+                self._inflight.add(key)
+                logger.debug("Prefetching %s", key)
+                try:
+                    await self.synthesize_paragraph(doc_id, page, para, text, voice)
+                finally:
+                    self._inflight.discard(key)
 
-        # Inference is CPU-bound; run in executor to keep the event loop free.
-        wav = await loop.run_in_executor(
-            None,
-            lambda: self._tts.infer(text, ref_codes, ref_text),
-        )
-
-        import soundfile as sf
-
-        buf = io.BytesIO()
-        sf.write(buf, wav, samplerate=24000, format="WAV")
-        buf.seek(0)
-        return buf.read()
+        task = asyncio.create_task(_run())
+        self._prefetch_tasks.add(task)
+        task.add_done_callback(self._prefetch_tasks.discard)
 
 
-# Module-level singleton — imported by routers and the lifespan handler.
-tts_service = TTSService()
+tts_service = KokoroService()

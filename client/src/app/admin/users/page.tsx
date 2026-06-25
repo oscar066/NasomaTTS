@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Search, UserPlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,11 +11,18 @@ import { TopBar } from "@/app/components/Dashboard/TopBar";
 import { UsersTable } from "@/app/components/Dashboard/admin/components/UsersTable";
 import { CreateUserModal } from "@/app/components/Dashboard/admin/components/CreateUserModal";
 import { EditUserModal } from "@/app/components/Dashboard/admin/components/EditUserModal";
-import { adminApi, type AdminUser } from "@/lib/api";
+import { adminApi, type AdminUser, UnauthorizedError } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function AdminUsersPage() {
   const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "loading") return;
+    if (session?.error === "AccessTokenExpired") { router.replace("/auth/login"); return; }
+    if (!session?.user?.is_superuser) router.replace("/dashboard");
+  }, [status, session, router]);
 
   const [sidebarOpen, setSidebarOpen] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth >= 768 : true
@@ -43,10 +51,16 @@ export default function AdminUsersPage() {
       const res = await adminApi.users(token, search, page * 20);
       setUsers(res.users);
       setTotal(res.total);
+    } catch (err: unknown) {
+      if (err instanceof UnauthorizedError) {
+        router.replace("/auth/login");
+      } else {
+        toast.error("Failed to load users", { description: err instanceof Error ? err.message : "Unknown error" });
+      }
     } finally {
       setLoadingUsers(false);
     }
-  }, [token, search, page]);
+  }, [token, search, page, router]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
   useEffect(() => { setPage(0); }, [search]);
@@ -88,7 +102,7 @@ export default function AdminUsersPage() {
     }
   };
 
-  if (status === "loading") {
+  if (status === "loading" || !session?.user?.is_superuser) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />

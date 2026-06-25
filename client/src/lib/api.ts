@@ -1,6 +1,13 @@
 // Typed REST client for the FastAPI backend.
 // All functions throw on non-2xx responses so callers can catch normally.
 
+export class UnauthorizedError extends Error {
+  constructor(message = "Unauthorized") {
+    super(message);
+    this.name = "UnauthorizedError";
+  }
+}
+
 // Server-side uses API_URL (internal Docker network name).
 // Browser uses NEXT_PUBLIC_API_URL (/api), which nginx rewrites in production
 // and Next.js rewrites proxy locally.
@@ -25,6 +32,7 @@ async function request<T>(
   const res = await fetch(`${BASE}${path}`, { ...init, headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
+    if (res.status === 401) throw new UnauthorizedError(err.detail ?? "Unauthorized");
     throw new Error(err.detail ?? "Request failed");
   }
   return res.json() as Promise<T>;
@@ -165,12 +173,22 @@ export const adminApi = {
 export interface StoredParagraph {
   text: string;
   /**
-   * Bounding box in PDF user-space coordinates [x0, y0, x1, y1] (points at
-   * 72 DPI, origin at top-left of the page).  Present for documents uploaded
-   * after coordinate-overlay highlighting was introduced; undefined for legacy
-   * paragraphs.
+   * Paragraph bounding box in PDF user-space coordinates [x0, y0, x1, y1]
+   * (points at 72 DPI, origin top-left).  Tight bbox computed from constituent
+   * words — accurate even for single-stream PDFs where block detection fails.
    */
   bbox?: [number, number, number, number];
+  /**
+   * Ordered list of words in this paragraph (parallel to word_bboxes).
+   * Used by the SSE word-index to look up which word is being spoken.
+   */
+  word_texts?: string[];
+  /**
+   * Per-word bounding boxes [x0, y0, x1, y1] in PDF user-space coordinates,
+   * in the same order as word_texts.  The frontend scales these by
+   * (containerWidth / page.width) to position highlight overlays precisely.
+   */
+  word_bboxes?: [number, number, number, number][];
 }
 
 export interface StoredPage {
@@ -191,8 +209,11 @@ export interface Document {
   content: string;
   pdf_url?: string | null;
   thumbnail_url?: string | null;
-  pages?: StoredPage[] | null;
-  /** Last page the user reached (0-based). Set to pages.length for 100 %. */
+  /** Number of pages. Pages themselves are fetched via GET /documents/{id}/pages. */
+  page_count?: number | null;
+  /** Total words across all pages. Used for reading-time estimates and statistics. */
+  total_word_count?: number | null;
+  /** Last page the user reached (0-based). Set to page_count for 100 %. */
   current_page?: number;
   reading_status?: string | null;
   author: { id: string; username: string; email: string };
@@ -213,7 +234,7 @@ export const documentsApi = {
   get: (id: string, token?: string) =>
     request<Document>(`/documents/${id}`, {}, token),
 
-  create: (body: { title: string; content: string; pdf_url?: string | null; thumbnail_url?: string | null; pages?: StoredPage[] | null }, token: string) =>
+  create: (body: { title: string; content: string; pdf_url?: string | null; thumbnail_url?: string | null; pages?: StoredPage[] | null; page_count?: number | null; total_word_count?: number | null }, token: string) =>
     request<Document>("/documents", {
       method: "POST",
       body: JSON.stringify(body),
@@ -255,12 +276,16 @@ export const pdfApi = {
   upload: (file: File, token: string) => {
     const form = new FormData();
     form.append("pdf", file);
-    return request<{ title: string; content: string; pdf_url: string | null; thumbnail_url: string | null; pages: StoredPage[]; message: string }>(
-      "/pdf/upload",
-      { method: "POST", body: form },
-      token
-    );
+    return request<Document>("/pdf/upload", { method: "POST", body: form }, token);
   },
+
+  /**
+   * Fetch all pages for a document, including paragraph and word-level bbox data.
+   * Served from the backend's Redis cache after the first load (TTL 24 h).
+   * Returns an empty array for plain-text documents that have no page data.
+   */
+  getPages: (docId: string, token?: string) =>
+    request<StoredPage[]>(`/documents/${docId}/pages`, {}, token),
 };
 
 // ── Voices 
@@ -268,6 +293,9 @@ export const pdfApi = {
 export interface Voice {
   id: string;
   label: string;
+  tier?: "premium" | "standard";
+  icon?: string;
+  group?: string;
 }
 
 export const voicesApi = {
@@ -311,6 +339,32 @@ export function speakStream(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, voice, wpm }),
+    signal,
+  });
+}
+
+// ── Paragraph audio (GET → WAV bytes from Kokoro sidecar)
+
+/**
+ * Fetch synthesized WAV audio for a specific paragraph in a stored document.
+ * Returns the raw fetch Response so the caller can check status before
+ * creating a blob URL — avoids holding large audio buffers in memory.
+ */
+export function fetchParagraphAudio(
+  docId: string,
+  page: number,
+  para: number,
+  voice: string,
+  token: string,
+  signal?: AbortSignal
+): Promise<Response> {
+  const params = new URLSearchParams({
+    page: String(page),
+    para: String(para),
+    voice,
+  });
+  return fetch(`${BASE}/tts/audio/${docId}?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
     signal,
   });
 }

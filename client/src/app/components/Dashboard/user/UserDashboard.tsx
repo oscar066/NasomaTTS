@@ -7,10 +7,11 @@ import Sidebar from "../SideBar";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { documentsApi } from "@/lib/api";
-import { Upload, FileText, AlertCircle, Loader2 } from "lucide-react";
+import { Upload, FileText, AlertCircle, Loader2, Crown } from "lucide-react";
 import { useDocumentUpload } from "@/hooks/useDocumentUpload";
 import { useDocumentsStore } from "@/store/documents";
 import { toast } from "sonner";
+import UpgradeModal from "@/components/ui/UpgradeModal";
 
 function SkeletonCard() {
   return (
@@ -71,6 +72,7 @@ export default function UserDashboard() {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showUpgrade, setShowUpgrade] = useState(false);
   const fileInputRef            = useRef<HTMLInputElement>(null);
   const { uploadDocument, isLoading: isUploading } = useDocumentUpload();
   const { documents, isLoaded, setDocuments, updateDocument, removeDocument } = useDocumentsStore();
@@ -121,8 +123,13 @@ export default function UserDashboard() {
       toast.success("Document uploaded", { description: `"${shortName}" has been processed and saved.` });
       if (result?.id) router.push(`/documents/${result.id}`);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "An error occurred during upload.";
-      toast.error("Upload failed", { description: msg });
+      const e = err as Error & { isPlanLimit?: boolean };
+      if (e.isPlanLimit) {
+        setShowUpgrade(true);
+      } else {
+        const msg = e.message || "An error occurred during upload.";
+        toast.error("Upload failed", { description: msg });
+      }
     } finally {
       event.target.value = "";
     }
@@ -130,6 +137,9 @@ export default function UserDashboard() {
 
   const firstName     = session?.user?.name?.split(" ")[0] ?? "there";
   const isInitialLoad = loading && !isLoaded;
+  const userPlan      = session?.user?.plan ?? "free";
+  const isFree        = userPlan === "free";
+  const FREE_LIMIT    = 5;
   const filteredDocs  = searchQuery.trim()
     ? documents.filter((d) => d.title.toLowerCase().includes(searchQuery.toLowerCase()))
     : documents;
@@ -146,22 +156,40 @@ export default function UserDashboard() {
     <div className="flex h-screen bg-background overflow-hidden">
       <Sidebar isOpen={sidebarOpen} />
 
+      <UpgradeModal
+        open={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        title="Document limit reached"
+        description={`Free plan allows up to ${FREE_LIMIT} documents. Upgrade to Pro for unlimited uploads.`}
+      />
+
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar onToggleSidebar={() => setSidebarOpen((p) => !p)} onSearch={setSearchQuery} />
 
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold">
-              {isInitialLoad ? "Your Library" : `Hey, ${firstName} 👋`}
-            </h1>
-            {!isInitialLoad && !error && (
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {documents.length === 0
-                  ? "Your library is empty. Upload a PDF to get started."
-                  : searchQuery
-                  ? `${filteredDocs.length} result${filteredDocs.length !== 1 ? "s" : ""} for "${searchQuery}"`
-                  : `${documents.length} document${documents.length !== 1 ? "s" : ""} in your library`}
-              </p>
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold">
+                {isInitialLoad ? "Your Library" : `Hey, ${firstName} 👋`}
+              </h1>
+              {!isInitialLoad && !error && (
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {documents.length === 0
+                    ? "Your library is empty. Upload a PDF to get started."
+                    : searchQuery
+                    ? `${filteredDocs.length} result${filteredDocs.length !== 1 ? "s" : ""} for "${searchQuery}"`
+                    : `${documents.length} document${documents.length !== 1 ? "s" : ""} in your library`}
+                </p>
+              )}
+            </div>
+            {!isInitialLoad && isFree && (
+              <button
+                onClick={() => setShowUpgrade(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors flex-shrink-0"
+              >
+                <Crown className="h-3.5 w-3.5" />
+                {documents.length}/{FREE_LIMIT} uploads · Go Pro
+              </button>
             )}
           </div>
 

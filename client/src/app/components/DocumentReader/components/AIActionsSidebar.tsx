@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { Bot, FileText, HelpCircle, History, X } from "lucide-react";
+import { Bot, FileText, HelpCircle, History, Lock, X } from "lucide-react";
 import { Drawer as DrawerPrimitive } from "vaul";
 import { DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
+import UpgradeModal from "@/components/ui/UpgradeModal";
 
 import { type ActionKey, PANEL_META } from "./panels/types";
 import ChatPanel    from "./panels/ChatPanel";
@@ -21,16 +22,20 @@ const ACTIONS: { label: string; icon: React.ElementType; key: ActionKey }[] = [
 
 interface AIActionsSidebarProps {
   onOpenChange?: (isOpen: boolean) => void;
+  userPlan?: string;
 }
 
-const AIActionsSidebar: React.FC<AIActionsSidebarProps> = ({ onOpenChange }) => {
+const AIActionsSidebar: React.FC<AIActionsSidebarProps> = ({ onOpenChange, userPlan = "free" }) => {
   const [open, setOpen] = useState<ActionKey | null>(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const isPro = userPlan === "pro";
 
   const setPanel = (key: ActionKey | null) => {
+    if (key !== null && !isPro) { setShowUpgrade(true); return; }
     setOpen(key);
     onOpenChange?.(key !== null);
   };
-  const close = () => setPanel(null);
+  const close = () => { setOpen(null); onOpenChange?.(false); };
 
   const activeAction = ACTIONS.find((a) => a.key === open);
 
@@ -43,10 +48,12 @@ const AIActionsSidebar: React.FC<AIActionsSidebarProps> = ({ onOpenChange }) => 
             <button
               key={key}
               onClick={() => setPanel(key)}
-              title={label}
+              title={!isPro ? `${label} — Pro feature` : label}
               className="flex items-center justify-center xl:justify-start gap-2.5 px-2 py-2 xl:px-3 rounded-xl border border-border text-sm font-medium shadow-sm transition-all duration-150 w-10 xl:w-32 bg-muted/50 text-foreground hover:border-primary/40 hover:bg-muted hover:text-primary"
             >
-              <Icon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+              {isPro
+                ? <Icon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                : <Lock className="h-4 w-4 flex-shrink-0 text-muted-foreground/50" />}
               <span className="hidden xl:inline">{label}</span>
             </button>
           ))}
@@ -124,6 +131,13 @@ const AIActionsSidebar: React.FC<AIActionsSidebarProps> = ({ onOpenChange }) => 
           </DrawerPrimitive.Content>
         </DrawerPrimitive.Portal>
       </DrawerPrimitive.Root>
+
+      <UpgradeModal
+        open={showUpgrade}
+        onClose={() => setShowUpgrade(false)}
+        title="AI features"
+        description="Chat, summarize, quiz, and recap your documents with Pro."
+      />
     </>
   );
 };

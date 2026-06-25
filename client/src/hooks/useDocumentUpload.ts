@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { pdfApi, documentsApi, Document } from "@/lib/api";
+import { pdfApi, Document } from "@/lib/api";
 import { useDocumentsStore } from "@/store/documents";
 
 export const useDocumentUpload = () => {
@@ -28,12 +28,9 @@ export const useDocumentUpload = () => {
       setIsLoading(true);
       setError(null);
 
-      const { content, pdf_url, thumbnail_url, pages } = await pdfApi.upload(file, token);
-      const title = file.name.replace(/\.[^/.]+$/, "");
-
-      const doc = await documentsApi.create({ title, content, pdf_url, thumbnail_url, pages }, token);
-      // Always update the dashboard store so any upload path (sidebar, empty
-      // state, grid, etc.) immediately reflects the new document.
+      // PDF upload now creates the document record server-side, so page data
+      // never travels through the Next.js proxy.  The response is a full Document.
+      const doc = await pdfApi.upload(file, token);
       addDocument(doc);
       return doc;
     } catch (err: unknown) {
@@ -42,7 +39,9 @@ export const useDocumentUpload = () => {
       if (msg.toLowerCase().includes("unauthorized")) {
         router.push("/auth/login");
       }
-      throw err;
+      const enriched = new Error(msg) as Error & { isPlanLimit?: boolean };
+      enriched.isPlanLimit = msg.toLowerCase().includes("free plan limit");
+      throw enriched;
     } finally {
       setIsLoading(false);
     }

@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     # ── JWT authentication
     jwt_secret: str = "change-me"       # Must be overridden in production.
-    jwt_expire_hours: int = 24          # Token lifetime in hours.
+    jwt_expire_hours: int = 720         # Token lifetime in hours (30 days, matches NextAuth session).
 
     # ── Redis cache
     redis_url: str = "redis://localhost:6379"
@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # ── Email (Resend)
     resend_api_key: str = ""
     frontend_url: str = "http://localhost:3001"
+
+    # ── Kokoro TTS sidecar (remsky/Kokoro-FastAPI, port 8880)
+    kokoro_url: str = "http://localhost:8880"
 
     # ── MinIO object storage
     minio_endpoint: str = "localhost:9000"
