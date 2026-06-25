@@ -68,6 +68,7 @@ interface TTSOverlayProps {
   speed: number;
   totalWordCount?: number | null;
   skipUnit?: "page" | "paragraph";
+  ttsAvailable?: boolean;
   aiPanelOpen?: boolean;
   userPlan?: string;
   onPlay: () => void;
@@ -105,6 +106,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
   speed,
   totalWordCount,
   skipUnit = "paragraph",
+  ttsAvailable = true,
   aiPanelOpen = false,
   userPlan = "free",
   onPlay,
@@ -380,7 +382,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
               </Button>
 
               <div className="relative flex items-center justify-center">
-                {(!isPlaying && voices.length === 0) && (
+                {((!isPlaying && voices.length === 0) || (isPlaying && !ttsAvailable)) && (
                   <span
                     className="absolute rounded-full border-2 border-primary/60 border-t-transparent animate-spin pointer-events-none"
                     style={{ inset: "-5px" }}
@@ -389,11 +391,11 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
                 <button
                   onClick={isPlaying ? onStop : onPlay}
                   className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-purple-500 hover:opacity-90 text-white flex items-center justify-center shadow-lg shadow-primary/25 transition-all hover:scale-105 active:scale-95"
-                  title={isPlaying ? "Pause (Space)" : "Play (Space)"}
+                  title={isPlaying && !ttsAvailable ? "Warming up…" : isPlaying ? "Pause (Space)" : "Play (Space)"}
                 >
                   {isPlaying
-                    ? <Volume2     className="h-4 w-4" />
-                    : <Headphones  className="h-4 w-4" />
+                    ? <Volume2    className="h-4 w-4" />
+                    : <Headphones className="h-4 w-4" />
                   }
                 </button>
               </div>
