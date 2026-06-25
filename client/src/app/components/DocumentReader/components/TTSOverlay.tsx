@@ -63,6 +63,8 @@ interface TTSOverlayProps {
   voice: string;
   voices: Voice[];
   speed: number;
+  totalWordCount?: number | null;
+  skipUnit?: "page" | "paragraph";
   aiPanelOpen?: boolean;
   onPlay: () => void;
   onStop: () => void;
@@ -76,6 +78,17 @@ const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 const GROUP_ORDER = ["American", "British", "Other"];
 const GROUP_FLAG: Record<string, string> = { American: "🇺🇸", British: "🇬🇧" };
 
+// Base WPM the backend uses (150 wpm at 1× speed); actual rate scales linearly.
+const BASE_WPM = 150;
+
+function fmtDuration(minutes: number): string {
+  if (minutes < 1) return "<1 min";
+  if (minutes < 60) return `${Math.round(minutes)} min`;
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
 const TTSOverlay: React.FC<TTSOverlayProps> = ({
   isPlaying,
   currentParagraphIndex,
@@ -86,6 +99,8 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
   voice,
   voices,
   speed,
+  totalWordCount,
+  skipUnit = "paragraph",
   aiPanelOpen = false,
   onPlay,
   onStop,
@@ -102,6 +117,10 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
     totalParagraphs > 0
       ? ((currentParagraphIndex + 1) / totalParagraphs) * 100
       : 0;
+
+  const wpm = BASE_WPM * speed;
+  const totalMinutes  = totalWordCount ? totalWordCount / wpm : null;
+  const elapsedMinutes = totalMinutes !== null ? (progress / 100) * totalMinutes : null;
 
   const selectedVoice = voices.find((v) => v.id === voice);
 
@@ -124,26 +143,9 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
     >
       <div className="rounded-xl border border-border bg-card shadow-md overflow-hidden">
 
-        {/* Drag handle — collapses / expands word strip */}
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="w-full flex items-center justify-center pt-2 pb-1 group"
-          title={expanded ? "Collapse" : "Expand"}
-        >
-          <div className="w-8 h-1 rounded-full bg-muted-foreground/25 group-hover:bg-primary/40 transition-colors" />
-        </button>
-
-        {/* Progress bar */}
-        <div className="h-0.5 bg-border">
-          <div
-            className="h-full bg-gradient-to-r from-primary to-purple-500 transition-all duration-500 ease-out rounded-full"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-
         {/* Word focus strip */}
         {expanded && (
-          <div className="min-h-[64px] flex items-center justify-center px-6 py-3 border-b border-border overflow-hidden">
+          <div className="min-h-[64px] flex items-center justify-center px-6 py-3 overflow-hidden">
             {wordWindow.length > 0 ? (
               <div className="flex items-center gap-2 flex-wrap justify-center">
                 {wordWindow.map((word, i) => {
@@ -183,6 +185,26 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
                 Press play to start reading
               </p>
             )}
+          </div>
+        )}
+
+        {/* Progress bar */}
+        <div className="h-0.5 bg-border">
+          <div
+            className="h-full bg-gradient-to-r from-primary to-purple-500 transition-all duration-500 ease-out rounded-full"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
+        {/* Time estimate row */}
+        {totalMinutes !== null && (
+          <div className="flex items-center justify-between px-4 pt-1.5 pb-0">
+            <span className="text-[11px] tabular-nums font-bold text-muted-foreground">
+              {elapsedMinutes !== null ? fmtDuration(elapsedMinutes) : "0 min"}
+            </span>
+            <span className="text-[11px] tabular-nums font-bold text-muted-foreground">
+              {fmtDuration(totalMinutes)}
+            </span>
           </div>
         )}
 
@@ -278,7 +300,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
                 className="h-8 w-8 text-muted-foreground hover:text-foreground"
                 onClick={onPrevParagraph}
                 disabled={currentParagraphIndex <= 0}
-                title="Previous paragraph (←)"
+                title={`Previous ${skipUnit} (←)`}
               >
                 <SkipBack className="h-4 w-4" />
               </Button>
@@ -308,7 +330,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
                 className="h-8 w-8 text-muted-foreground hover:text-foreground"
                 onClick={onNextParagraph}
                 disabled={currentParagraphIndex >= totalParagraphs - 1}
-                title="Next paragraph (→)"
+                title={`Next ${skipUnit} (→)`}
               >
                 <SkipForward className="h-4 w-4" />
               </Button>

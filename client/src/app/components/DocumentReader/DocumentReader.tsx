@@ -55,6 +55,7 @@ const DocumentReader: React.FC = () => {
       voices,
       isPlaying,
       speed,
+      totalWordCount,
       loading,
       error,
       currentTTSPage,
@@ -83,12 +84,7 @@ const DocumentReader: React.FC = () => {
     pageEl?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  // Three triggers that should scroll the viewer to the active TTS page:
-  //   1. `currentTTSPage` changes  → page advance during playback
-  //   2. `pdfLoaded` becomes true  → PDF just loaded; scroll to saved resume page
-  //   3. `isPlaying` becomes true  → user pressed play while already on the
-  //                                  saved page (page index didn't change, so
-  //                                  `currentTTSPage` alone wouldn't re-fire)
+  // Scroll to the active TTS page on page advance, initial load, and play.
   useEffect(() => {
     scrollToTTSPage(currentTTSPage);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -232,6 +228,8 @@ const DocumentReader: React.FC = () => {
         voice={voice}
         voices={voices}
         speed={speed}
+        totalWordCount={totalWordCount}
+        skipUnit={isPdfMode ? "page" : "paragraph"}
         onPlay={handlePlay}
         onStop={handleStop}
         onPrevParagraph={() => skipToParagraph(overlayParagraphIndex - 1)}
