@@ -51,8 +51,8 @@ export const useVoices = (token?: string): VoicesResult => {
     // 1. Try to get server-side Kokoro voices.
     try {
       const { voices: serverVoices, tts_available } = await voicesApi.list();
-      if (tts_available && serverVoices.length > 0) {
-        serverAvailable = true;
+      if (serverVoices.length > 0) {
+        serverAvailable = tts_available;
         premiumVoices = serverVoices.map((v) => ({ ...v, tier: "premium" as const }));
 
         // Restore server-saved voice preference.

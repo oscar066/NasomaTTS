@@ -33,29 +33,31 @@ class KokoroService:
         self._inflight: set[str] = set()  # Keys currently being synthesized
 
     async def load(self) -> None:
-        """Connect to the Kokoro sidecar, retrying until it is ready."""
+        """Create the HTTP client and do a single non-blocking probe.
+
+        A failed probe does NOT prevent the API from starting — Modal containers
+        are cold at boot and take longer than a quick ping allows.  Connectivity
+        is re-checked lazily on the first synthesis request.
+        """
         self._client = httpx.AsyncClient(
             base_url=settings.kokoro_url,
             timeout=httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0),
         )
-        for attempt in range(6):
-            try:
-                resp = await self._client.get("/health")
-                if resp.status_code == 200:
-                    self._available = True
-                    data = resp.json()
-                    logger.info(
-                        "Kokoro TTS connected at %s — status=%s",
-                        settings.kokoro_url,
-                        data.get("status"),
-                    )
-                    return
-            except Exception as exc:
-                logger.info("Kokoro not ready (attempt %d/6): %s", attempt + 1, exc)
-            if attempt < 5:
-                await asyncio.sleep(5)
-        logger.warning("Kokoro TTS unreachable after retries. Falling back to browser Web Speech API.")
+        await self._probe()
+
+    async def _probe(self) -> bool:
+        """Single /health check. Updates _available in place and returns it."""
+        try:
+            resp = await self._client.get("/health")
+            if resp.status_code == 200:
+                if not self._available:
+                    logger.info("Kokoro TTS connected at %s", settings.kokoro_url)
+                self._available = True
+                return True
+        except Exception as exc:
+            logger.info("Kokoro not reachable: %s", exc)
         self._available = False
+        return False
 
     async def close(self) -> None:
         if self._client:
@@ -99,9 +101,16 @@ class KokoroService:
     # ── Synthesis
 
     async def synthesize(self, text: str, voice: str = "sophia") -> Optional[bytes]:
-        """Call the Kokoro sidecar and return WAV bytes, or None on failure."""
-        if not self._available or not self._client:
+        """Call the Kokoro sidecar and return WAV bytes, or None on failure.
+
+        If Kokoro was unreachable at startup (e.g. Modal cold start), a lazy
+        probe is attempted here so the first playback request wakes the container.
+        """
+        if not self._client:
             return None
+        if not self._available:
+            if not await self._probe():
+                return None
         kokoro_id = VOICE_REGISTRY.get(voice, {}).get("kokoro_id", "af_heart")
         try:
             resp = await self._client.post(
