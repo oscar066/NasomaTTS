@@ -37,7 +37,7 @@ import type { StoredPage } from "@/lib/api";
 
 pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Constants 
 
 const INDEX_MAX_ATTEMPTS = 12;
 const INDEX_RETRY_MS     = 60;
@@ -47,7 +47,7 @@ const WINDOW_BEFORE = 12;
 /** Word entries after the current word that receive the reading-window tint. */
 const WINDOW_AFTER  = 20;
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types
 
 export interface PageData {
   wordCount: number;
@@ -95,7 +95,7 @@ interface WordEntry {
   text: string;
 }
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
+// ── Skeleton
 
 const LINE_WIDTHS = [
   "100%", "96%", "91%", "100%", "88%", "45%",
@@ -133,7 +133,7 @@ const DocumentSkeleton: React.FC<{ width: number }> = ({ width }) => {
   );
 };
 
-// ── PDFViewer ─────────────────────────────────────────────────────────────────
+// ── PDFViewer
 
 const PDFViewer: React.FC<PDFViewerProps> = ({
   url,
@@ -161,7 +161,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     opacity: number;
   } | null>(null);
 
-  // ── Lazy rendering ────────────────────────────────────────────────────────
+  // ── Lazy rendering
   // Rendering 100+ PDF canvases simultaneously blocks the main thread.
   // We track which pages have been "activated" (entered the viewport or been
   // targeted by TTS).  Once activated a page is never deactivated — so
@@ -182,7 +182,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   const indexedCountRef = useRef(0);
   const numPagesRef     = useRef(0);
 
-  // ── Container resize observer ─────────────────────────────────────────────
+  // ── Container resize observer
 
   const containerRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
@@ -194,7 +194,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     return () => ro.disconnect();
   }, []);
 
-  // ── Reset on URL change ───────────────────────────────────────────────────
+  // ── Reset on URL change
 
   useEffect(() => {
     wordEntriesRef.current      = [];
@@ -255,7 +255,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     return () => observer.disconnect();
   }, [numPages]);
 
-  // ── Pre-activate the TTS target page ─────────────────────────────────────
+  // ── Pre-activate the TTS target page
   //
   // When playback advances to a page the user hasn't scrolled to yet, we must
   // ensure that page (and the next two) are rendered so highlighting works.
@@ -277,7 +277,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     });
   }, [highlightPage]);
 
-  // ── Text layer indexing ───────────────────────────────────────────────────
+  // ── Text layer indexing
 
   const indexPageWords = useCallback(
     (pageIndex: number, attempt = 0) => {

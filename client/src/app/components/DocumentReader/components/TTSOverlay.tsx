@@ -122,7 +122,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
         transition: "left 300ms ease-in-out",
       }}
     >
-      <div className="rounded-2xl border border-white/10 bg-background/20 backdrop-blur-2xl shadow-[0_8px_40px_rgba(0,0,0,0.15),inset_0_1px_0_rgba(255,255,255,0.12)] overflow-hidden">
+      <div className="rounded-xl border border-border bg-card shadow-md overflow-hidden">
 
         {/* Drag handle — collapses / expands word strip */}
         <button
@@ -130,20 +130,20 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
           className="w-full flex items-center justify-center pt-2 pb-1 group"
           title={expanded ? "Collapse" : "Expand"}
         >
-          <div className="w-8 h-1 rounded-full bg-border/60 group-hover:bg-primary/40 transition-colors" />
+          <div className="w-8 h-1 rounded-full bg-muted-foreground/25 group-hover:bg-primary/40 transition-colors" />
         </button>
 
         {/* Progress bar */}
-        <div className="h-0.5 bg-border/30">
+        <div className="h-0.5 bg-border">
           <div
-            className="h-full bg-gradient-to-r from-primary/60 to-purple-500/60 transition-all duration-500 ease-out rounded-full"
+            className="h-full bg-gradient-to-r from-primary to-purple-500 transition-all duration-500 ease-out rounded-full"
             style={{ width: `${progress}%` }}
           />
         </div>
 
         {/* Word focus strip */}
         {expanded && (
-          <div className="min-h-[64px] flex items-center justify-center px-6 py-3 border-b border-border/40 overflow-hidden">
+          <div className="min-h-[64px] flex items-center justify-center px-6 py-3 border-b border-border overflow-hidden">
             {wordWindow.length > 0 ? (
               <div className="flex items-center gap-2 flex-wrap justify-center">
                 {wordWindow.map((word, i) => {
@@ -195,7 +195,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
             {/* Voice picker */}
             <DropdownMenu open={voiceOpen} onOpenChange={setVoiceOpen}>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1.5 h-7 px-2 rounded-md bg-background/40 border border-border text-xs hover:bg-background/60 transition-colors focus:outline-none">
+                <button className="flex items-center gap-1.5 h-7 px-2 rounded-md bg-secondary border border-border text-xs hover:bg-muted transition-colors focus:outline-none">
                   <div className={`w-4 h-4 rounded-full ${avatarColor(voice)} flex items-center justify-center text-white font-bold text-[8px] flex-shrink-0`}>
                     {(selectedVoice?.label ?? "?")[0].toUpperCase()}
                   </div>
@@ -317,7 +317,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
             {/* Speed */}
             <DropdownMenu open={speedOpen} onOpenChange={setSpeedOpen}>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center h-7 px-2.5 rounded-md bg-background/40 border border-border text-xs font-semibold tabular-nums hover:bg-background/60 transition-colors focus:outline-none">
+                <button className="flex items-center h-7 px-2.5 rounded-md bg-secondary border border-border text-xs font-semibold tabular-nums hover:bg-muted transition-colors focus:outline-none">
                   {speed}×
                 </button>
               </DropdownMenuTrigger>
