@@ -374,7 +374,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     [onPagesReady]
   );
 
-  // ── Resolve paragraph start offset in pdf.js entries ─────────────────────
+  // ── Resolve paragraph start offset in pdf.js entries 
   //
   // Returns the entry index where the given paragraph begins, scaled from
   // PyMuPDF word counts to pdf.js entry counts.
@@ -391,7 +391,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     return Math.min(Math.round(rawStart * ratio), totalEntries - 1);
   };
 
-  // ── Combined highlight effect ─────────────────────────────────────────────
+  // ── Combined highlight effect 
   //
   // Runs on every word advance (currentWordInParagraph) and also whenever a
   // page finishes indexing (indexedCount) so it retries after the race window.
@@ -403,7 +403,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   //      scroll current word into view.
 
   useEffect(() => {
-    // ── 1. Clear previous window tint ────────────────────────────────────
+    // ── 1. Clear previous window tint
     for (const sp of activeWindowSpansRef.current) {
       sp.classList.remove("nasoma-window");
     }
@@ -450,7 +450,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       entries.length - 1
     );
 
-    // ── 3b. Paragraph overlay OR reading-window fallback ────────────────
+    // ── 3b. Paragraph overlay OR reading-window fallback
     //
     // Prefer a coordinate-based overlay div (bbox) when the stored page data
     // has it — this is pixel-perfect and requires no text-layer span mapping.
@@ -617,7 +617,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                     <DocumentSkeleton width={containerWidth || 800} />
                   )}
 
-                  {/* ── Paragraph bbox overlay ─────────────────────────────
+                  {/* ── Paragraph bbox overlay
                       Soft background tint over the active paragraph.
                       Scaled from PDF user-space → canvas pixels.
                       pointer-events: none preserves text-layer interactivity. */}
@@ -651,7 +651,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                     );
                   })()}
 
-                  {/* ── Word bbox overlay ───────────────────────────────────
+                  {/* Word bbox overlay
                       Precise highlight on the word currently being spoken.
                       Sits above the paragraph tint (z-index 11). Only rendered
                       for documents with word_bboxes in their manifest. */}
