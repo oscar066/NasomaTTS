@@ -24,14 +24,18 @@ import asyncio
 import json
 
 from beanie import PydanticObjectId
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from ..models.document import NasomaDocument
 from ..models.document_page import NasomaDocumentPage
 from ..services.tts import tts_service
+from ..services.voices import VOICE_REGISTRY
+from ..utils.deps import get_optional_user
 from ..utils.logger import setup_logger
+
+PREMIUM_VOICES = frozenset(VOICE_REGISTRY.keys())
 
 logger = setup_logger("nasoma.routes.speak")
 router = APIRouter(tags=["speak"])
@@ -170,12 +174,17 @@ async def speak(request: Request, payload: SpeakRequest):
 
 
 @router.post("/tts/audio")
-async def generate_audio(text: str, voice: str = "sophia"):
+async def generate_audio(text: str, voice: str = "sophia", current_user=Depends(get_optional_user)):
     """Synthesise and return WAV audio for the given text.
 
     Returns a JSON fallback hint when the Kokoro sidecar is unavailable so the
     client can fall back to the browser's Web Speech API automatically.
     """
+    if voice in PREMIUM_VOICES:
+        plan = getattr(current_user, "plan", None) if current_user else None
+        if plan != "pro":
+            raise HTTPException(status_code=403, detail="Premium voices require a Pro subscription.")
+
     if not tts_service.available:
         logger.info("TTS audio requested but Kokoro unavailable — returning fallback hint")
         return {"tts_available": False, "fallback": "web_speech_api"}
@@ -194,6 +203,7 @@ async def paragraph_audio(
     page: int = Query(..., ge=0),
     para: int = Query(..., ge=0),
     voice: str = Query("sophia"),
+    current_user=Depends(get_optional_user),
 ):
     """Return synthesised WAV for a specific paragraph in a stored document.
 
@@ -212,6 +222,11 @@ async def paragraph_audio(
     Returns:
         ``audio/wav`` binary, or a JSON fallback hint when Kokoro is unavailable.
     """
+    if voice in PREMIUM_VOICES:
+        plan = getattr(current_user, "plan", None) if current_user else None
+        if plan != "pro":
+            raise HTTPException(status_code=403, detail="Premium voices require a Pro subscription.")
+
     if not tts_service.available:
         return {"tts_available": False, "fallback": "web_speech_api"}
 

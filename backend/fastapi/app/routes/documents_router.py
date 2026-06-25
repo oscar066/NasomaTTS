@@ -135,12 +135,23 @@ async def get_document(doc_id: str):
     return result
 
 
+FREE_DOCUMENT_LIMIT = 5
+
+
 @router.post("")
 async def create_document(data: DocumentCreate, current_user: User = Depends(get_current_user)):
     if not data.title or not data.content:
         raise HTTPException(status_code=400, detail="Title and content are required")
     if len(data.title) > 200:
         raise HTTPException(status_code=400, detail="Title too long (max 200 characters)")
+
+    if current_user.plan == "free":
+        count = await NasomaDocument.find(NasomaDocument.author == current_user.id).count()
+        if count >= FREE_DOCUMENT_LIMIT:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Free plan limit reached ({FREE_DOCUMENT_LIMIT} documents). Upgrade to Pro for unlimited uploads.",
+            )
 
     page_count = len(data.pages) if data.pages else None
 

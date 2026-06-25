@@ -268,11 +268,7 @@ export const pdfApi = {
   upload: (file: File, token: string) => {
     const form = new FormData();
     form.append("pdf", file);
-    return request<{ title: string; content: string; pdf_url: string | null; thumbnail_url: string | null; pages: StoredPage[]; total_word_count: number; message: string }>(
-      "/pdf/upload",
-      { method: "POST", body: form },
-      token
-    );
+    return request<Document>("/pdf/upload", { method: "POST", body: form }, token);
   },
 
   /**

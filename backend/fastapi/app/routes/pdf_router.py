@@ -34,10 +34,13 @@ from fastapi.responses import Response, StreamingResponse
 
 from ..utils.config import settings
 from ..models.document import NasomaDocument
+from ..models.document_page import NasomaDocumentPage
 from ..utils.deps import get_current_user
 from ..services.storage import get_pdf_stream, upload_file, upload_pdf
-from ..utils.cache import cache_get, cache_set
+from ..utils.cache import cache_del, cache_get, cache_set
 from ..utils.logger import setup_logger
+
+FREE_DOCUMENT_LIMIT = 5
 
 logger = setup_logger("nasoma.routes.pdf")
 router = APIRouter(prefix="/pdf", tags=["pdf"])
@@ -265,6 +268,16 @@ async def upload_pdf_route(
         logger.warning("PDF too large: %d bytes (filename=%s)", len(content), pdf.filename)
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
 
+    # ── Free-user document limit check — before any CPU work or MinIO uploads
+    # so we never waste resources processing a file that will be rejected.
+    if current_user.plan == "free":
+        count = await NasomaDocument.find(NasomaDocument.author == current_user.id).count()
+        if count >= FREE_DOCUMENT_LIMIT:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Free plan limit reached ({FREE_DOCUMENT_LIMIT} documents). Upgrade to Pro for unlimited uploads.",
+            )
+
     # ── Text extraction (CPU-bound) — run in a thread so the event loop stays
     # free to serve other requests while PyMuPDF does its work.
     try:
@@ -299,14 +312,56 @@ async def upload_pdf_route(
         bool(pdf_key),
         bool(thumbnail_key),
     )
+
+    # ── Persist document + pages server-side so the client never needs to send
+    # the large page payload back.  Pages stay on the server from here on.
+    title = pdf.filename.removesuffix(".pdf").strip() or pdf.filename
+    doc = await NasomaDocument(
+        title=title,
+        content=text,
+        pdf_url=pdf_key,
+        thumbnail_url=thumbnail_key,
+        page_count=len(pages),
+        total_word_count=total_word_count,
+        author=current_user.id,
+    ).insert()
+
+    if pages:
+        try:
+            await NasomaDocumentPage.insert_many([
+                NasomaDocumentPage(
+                    doc_id=doc.id,
+                    page_number=p["page_number"],
+                    text=p.get("text", ""),
+                    paragraphs=p.get("paragraphs", []),
+                    width=p.get("width", 0.0),
+                    height=p.get("height", 0.0),
+                )
+                for p in pages
+            ])
+        except Exception as e:
+            logger.error("Failed to save pages for doc %s: %s", doc.id, e)
+
+    await cache_del(f"cache:docs:user:{str(current_user.id)}")
+    logger.info("Document created from PDF: id=%s title=%r pages=%d user=%s", doc.id, title, len(pages), current_user.id)
+
     return {
-        "message":          "PDF parsed successfully",
-        "title":            pdf.filename,
-        "content":          text,
-        "pdf_url":          pdf_key,
-        "thumbnail_url":    thumbnail_key,
-        "pages":            pages,
-        "total_word_count": total_word_count,
+        "id":               str(doc.id),
+        "title":            doc.title,
+        "content":          doc.content,
+        "pdf_url":          doc.pdf_url,
+        "thumbnail_url":    doc.thumbnail_url,
+        "page_count":       doc.page_count,
+        "total_word_count": doc.total_word_count,
+        "current_page":     doc.current_page,
+        "reading_status":   doc.reading_status,
+        "author": {
+            "id":       str(current_user.id),
+            "username": current_user.username,
+            "email":    current_user.email,
+        },
+        "createdAt": doc.created_at,
+        "updatedAt": doc.updated_at,
     }
 
 

@@ -13,6 +13,7 @@ import AIActionsSidebar      from "./components/AIActionsSidebar";
 import { useDocumentReader } from "@/hooks/useDocumentReader";
 import { documentsApi }      from "@/lib/api";
 import { useDocumentsStore } from "@/store/documents";
+import { useSession }        from "next-auth/react";
 
 const PDFViewer = dynamic(() => import("./components/PDFViewer"), {
   ssr: false,
@@ -34,6 +35,8 @@ const HEADER_HEIGHT  = 56;
 
 const DocumentReader: React.FC = () => {
   const router = useRouter();
+  const { data: session } = useSession();
+  const userPlan = session?.user?.plan ?? "free";
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const { updateDocument } = useDocumentsStore();
 
@@ -137,7 +140,7 @@ const DocumentReader: React.FC = () => {
         </div>
 
         {/* Fake playback bar */}
-        <div className="fixed bottom-0 left-0 right-0 border-t border-border bg-background/95 backdrop-blur px-6 py-4 flex flex-col gap-3">
+        <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur px-6 py-4 flex flex-col gap-3">
           <div className="w-full h-1 rounded-full bg-muted animate-pulse" />
           <div className="flex items-center justify-center gap-4">
             <div className="w-8 h-8 rounded-full bg-muted animate-pulse" />
@@ -215,11 +218,12 @@ const DocumentReader: React.FC = () => {
         )}
       </main>
 
-      <AIActionsSidebar onOpenChange={setAiPanelOpen} />
+      <AIActionsSidebar onOpenChange={setAiPanelOpen} userPlan={userPlan} />
 
       <TTSOverlay
         isPlaying={isPlaying}
         aiPanelOpen={aiPanelOpen}
+        userPlan={userPlan}
         currentParagraphIndex={overlayParagraphIndex}
         totalParagraphs={overlayTotalParagraphs}
         currentWordIndex={currentWordIndex}

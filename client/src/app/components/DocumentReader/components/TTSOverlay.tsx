@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Headphones,
   Volume2,
   SkipBack,
   SkipForward,
   ChevronDown,
+  Lock,
+  Search,
 } from "lucide-react";
 import type { Voice } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -15,6 +17,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import UpgradeModal from "@/components/ui/UpgradeModal";
 
 // One distinct colour per Kokoro voice — drives the avatar circle
 const VOICE_COLORS: Record<string, string> = {
@@ -66,6 +69,7 @@ interface TTSOverlayProps {
   totalWordCount?: number | null;
   skipUnit?: "page" | "paragraph";
   aiPanelOpen?: boolean;
+  userPlan?: string;
   onPlay: () => void;
   onStop: () => void;
   onPrevParagraph: () => void;
@@ -102,6 +106,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
   totalWordCount,
   skipUnit = "paragraph",
   aiPanelOpen = false,
+  userPlan = "free",
   onPlay,
   onStop,
   onPrevParagraph,
@@ -112,6 +117,16 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
   const [expanded, setExpanded] = useState(true);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [speedOpen, setSpeedOpen] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [voiceSearch, setVoiceSearch] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const isPro = userPlan === "pro";
+
+  const handleVoiceChange = (id: string, tier?: string) => {
+    if (!isPro && tier === "premium") { setShowUpgrade(true); return; }
+    onVoiceChange(id);
+    setVoiceOpen(false);
+  };
 
   const progress =
     totalParagraphs > 0
@@ -134,6 +149,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
   }
 
   return (
+    <>
     <div
       className="-translate-x-1/2 fixed bottom-5 z-[60] w-full max-w-2xl px-4"
       style={{
@@ -141,7 +157,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
         transition: "left 300ms ease-in-out",
       }}
     >
-      <div className="rounded-xl border border-border bg-card shadow-md overflow-hidden">
+      <div className="rounded-xl border border-border bg-muted shadow-md overflow-hidden">
 
         {/* Word focus strip */}
         {expanded && (
@@ -215,7 +231,7 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
           <div className="flex items-center gap-10">
 
             {/* Voice picker */}
-            <DropdownMenu open={voiceOpen} onOpenChange={setVoiceOpen}>
+            <DropdownMenu open={voiceOpen} onOpenChange={(o) => { setVoiceOpen(o); if (!o) setVoiceSearch(""); }}>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-1.5 h-7 px-2 rounded-md bg-secondary border border-border text-xs hover:bg-muted transition-colors focus:outline-none">
                   <div className={`w-4 h-4 rounded-full ${avatarColor(voice)} flex items-center justify-center text-white font-bold text-[8px] flex-shrink-0`}>
@@ -233,61 +249,116 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
                 align="start"
                 sideOffset={8}
                 className="w-72 p-2 z-[70]"
+                onOpenAutoFocus={(e) => { e.preventDefault(); setTimeout(() => searchInputRef.current?.focus(), 0); }}
               >
-                <div className="max-h-44 overflow-y-auto pr-0.5">
-                  <p className="sticky top-0 text-[10px] font-semibold text-primary mb-1 px-1 py-0.5 flex items-center gap-1 bg-popover z-10">
-                    <span>✦</span><span>Premium</span>
-                  </p>
-                  {GROUP_ORDER.filter((g) => premiumGroups[g]).map((g) => (
-                    <div key={g} className="mb-2 last:mb-0">
-                      <p className="text-[10px] text-muted-foreground mb-1 px-1 flex items-center gap-1">
-                        {GROUP_FLAG[g] ?? ""} {g}
-                      </p>
-                      <div className="grid grid-cols-5 gap-1">
-                        {premiumGroups[g].map((v) => (
-                          <button
-                            key={v.id}
-                            onClick={() => { onVoiceChange(v.id); setVoiceOpen(false); }}
-                            className={`flex flex-col items-center gap-0.5 py-1.5 px-1 rounded-lg transition-all ${
-                              voice === v.id
-                                ? "bg-primary/15 ring-1 ring-primary/50"
-                                : "hover:bg-secondary/70"
-                            }`}
-                          >
-                            <div className={`w-8 h-8 rounded-full ${avatarColor(v.id)} flex items-center justify-center text-white font-bold text-xs shadow-sm`}>
-                              {v.label[0]}
-                            </div>
-                            <span className="text-[9px] text-foreground/80 leading-tight w-full text-center truncate px-0.5">
-                              {v.label}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                {/* Search input */}
+                <div className="relative mb-2">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+                  <input
+                    ref={searchInputRef}
+                    value={voiceSearch}
+                    onChange={(e) => setVoiceSearch(e.target.value)}
+                    placeholder="Search voices…"
+                    className="w-full pl-6 pr-2 py-1 text-xs rounded-md bg-muted border border-border focus:outline-none focus:ring-1 focus:ring-primary/40"
+                  />
                 </div>
 
-                {standard.length > 0 && (
-                  <div className="mt-1.5 pt-1.5 border-t border-border">
-                    <p className="text-[10px] font-semibold text-primary mb-1 px-1">
-                      Standard
-                    </p>
-                    <div className="max-h-24 overflow-y-auto space-y-0.5 pr-0.5">
-                      {standard.map((v) => (
-                        <button
-                          key={v.id}
-                          onClick={() => { onVoiceChange(v.id); setVoiceOpen(false); }}
-                          className={`w-full text-left text-xs px-2 py-0.5 rounded-md transition-colors ${
-                            voice === v.id
-                              ? "bg-primary/15 text-primary"
-                              : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                          }`}
-                        >
-                          {v.label}
-                        </button>
+                {voiceSearch.trim() ? (
+                  /* ── Flat search results ── */
+                  (() => {
+                    const q = voiceSearch.toLowerCase();
+                    const results = voices.filter((v) => v.label.toLowerCase().includes(q));
+                    if (results.length === 0) return (
+                      <p className="text-center text-[11px] text-muted-foreground py-4">No voices found</p>
+                    );
+                    return (
+                      <div className="max-h-52 overflow-y-auto space-y-0.5 pr-0.5">
+                        {results.map((v) => {
+                          const isPremium = v.tier === "premium";
+                          return (
+                            <button
+                              key={v.id}
+                              onClick={() => handleVoiceChange(v.id, v.tier)}
+                              className={`w-full flex items-center gap-2 text-xs px-2 py-1 rounded-md transition-colors ${
+                                voice === v.id
+                                  ? "bg-primary/15 text-primary"
+                                  : "text-foreground hover:bg-secondary"
+                              } ${isPremium && !isPro ? "opacity-60" : ""}`}
+                            >
+                              <div className={`w-5 h-5 rounded-full ${avatarColor(v.id)} flex items-center justify-center text-white font-bold text-[8px] flex-shrink-0`}>
+                                {isPremium && !isPro ? <Lock className="h-2.5 w-2.5" /> : v.label[0]}
+                              </div>
+                              <span className="flex-1 text-left truncate">{v.label}</span>
+                              {isPremium && (
+                                <span className="text-[9px] text-primary/70 font-semibold flex-shrink-0">✦ Pro</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  /* ── Normal grouped view ── */
+                  <>
+                    <div className="max-h-44 overflow-y-auto pr-0.5">
+                      <p className="sticky top-0 text-[10px] font-semibold text-primary mb-1 px-1 py-0.5 flex items-center gap-1 bg-popover z-10">
+                        <span>✦</span><span>Premium</span>
+                        {!isPro && <Lock className="h-2.5 w-2.5 ml-auto text-muted-foreground" />}
+                      </p>
+                      {GROUP_ORDER.filter((g) => premiumGroups[g]).map((g) => (
+                        <div key={g} className="mb-2 last:mb-0">
+                          <p className="text-[10px] text-muted-foreground mb-1 px-1 flex items-center gap-1">
+                            {GROUP_FLAG[g] ?? ""} {g}
+                          </p>
+                          <div className="grid grid-cols-5 gap-1">
+                            {premiumGroups[g].map((v) => (
+                              <button
+                                key={v.id}
+                                onClick={() => handleVoiceChange(v.id, "premium")}
+                                title={!isPro ? "Upgrade to Pro to use premium voices" : v.label}
+                                className={`flex flex-col items-center gap-0.5 py-1.5 px-1 rounded-lg transition-all relative ${
+                                  voice === v.id
+                                    ? "bg-primary/15 ring-1 ring-primary/50"
+                                    : "hover:bg-secondary/70"
+                                } ${!isPro ? "opacity-60" : ""}`}
+                              >
+                                <div className={`w-8 h-8 rounded-full ${avatarColor(v.id)} flex items-center justify-center text-white font-bold text-xs shadow-sm`}>
+                                  {!isPro ? <Lock className="h-3 w-3" /> : v.label[0]}
+                                </div>
+                                <span className="text-[9px] text-foreground/80 leading-tight w-full text-center truncate px-0.5">
+                                  {v.label}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
-                  </div>
+
+                    {standard.length > 0 && (
+                      <div className="mt-1.5 pt-1.5 border-t border-border">
+                        <p className="text-[10px] font-semibold text-primary mb-1 px-1">
+                          Standard
+                        </p>
+                        <div className="max-h-24 overflow-y-auto space-y-0.5 pr-0.5">
+                          {standard.map((v) => (
+                            <button
+                              key={v.id}
+                              onClick={() => { onVoiceChange(v.id); setVoiceOpen(false); }}
+                              className={`w-full text-left text-xs px-2 py-0.5 rounded-md transition-colors ${
+                                voice === v.id
+                                  ? "bg-primary/15 text-primary"
+                                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                              }`}
+                            >
+                              {v.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -371,6 +442,14 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
         </div>
       </div>
     </div>
+
+    <UpgradeModal
+      open={showUpgrade}
+      onClose={() => setShowUpgrade(false)}
+      title="Premium voices"
+      description="Upgrade to Pro to access 28 natural AI voices powered by Kokoro."
+    />
+    </>
   );
 };
 

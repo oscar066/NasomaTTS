@@ -22,7 +22,7 @@ const currencies = [
 ];
 
 const freeFeatures = [
-  { text: "Up to 10 documents",           included: true },
+  { text: "Up to 5 documents",             included: true },
   { text: "5 natural-sounding voices",    included: true },
   { text: "Standard quality audio",       included: true },
   { text: "Basic playback controls",      included: true },
