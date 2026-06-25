@@ -1,6 +1,13 @@
 // Typed REST client for the FastAPI backend.
 // All functions throw on non-2xx responses so callers can catch normally.
 
+export class UnauthorizedError extends Error {
+  constructor(message = "Unauthorized") {
+    super(message);
+    this.name = "UnauthorizedError";
+  }
+}
+
 // Server-side uses API_URL (internal Docker network name).
 // Browser uses NEXT_PUBLIC_API_URL (/api), which nginx rewrites in production
 // and Next.js rewrites proxy locally.
@@ -25,6 +32,7 @@ async function request<T>(
   const res = await fetch(`${BASE}${path}`, { ...init, headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
+    if (res.status === 401) throw new UnauthorizedError(err.detail ?? "Unauthorized");
     throw new Error(err.detail ?? "Request failed");
   }
   return res.json() as Promise<T>;

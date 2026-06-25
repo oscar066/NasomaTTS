@@ -12,6 +12,7 @@ import { authApi } from "@/lib/api";
 declare module "next-auth" {
   interface Session extends DefaultSession {
     accessToken?: string;
+    error?: "AccessTokenExpired";
     user: {
       id: string;
       email: string;
@@ -20,6 +21,9 @@ declare module "next-auth" {
     } & DefaultSession["user"];
   }
 }
+
+// 30 days in seconds — must match jwt_expire_hours in backend config.py
+const BACKEND_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 export const authOptions = {
   debug: process.env.NODE_ENV === "development",
@@ -58,11 +62,12 @@ export const authOptions = {
         try {
           const { access_token } = await authApi.googleAuth(account.id_token);
           const me = await authApi.me(access_token);
-          token.id           = me.id;
-          token.email        = me.email;
-          token.accessToken  = access_token;
-          token.is_superuser = me.is_superuser;
-          token.plan         = me.plan;
+          token.id                  = me.id;
+          token.email               = me.email;
+          token.accessToken         = access_token;
+          token.accessTokenExpiry   = Date.now() + BACKEND_TOKEN_TTL_SECONDS * 1000;
+          token.is_superuser        = me.is_superuser;
+          token.plan                = me.plan;
         } catch (err) {
           console.error("Google auth exchange failed:", err);
         }
@@ -72,11 +77,18 @@ export const authOptions = {
         token.id    = user.id;
         token.email = user.email;
         if (user.token) {
-          token.accessToken = user.token;
+          token.accessToken        = user.token;
+          token.accessTokenExpiry  = Date.now() + BACKEND_TOKEN_TTL_SECONDS * 1000;
           const me = await authApi.me(user.token as string);
           token.is_superuser = me.is_superuser;
           token.plan         = me.plan;
         }
+      }
+      // On subsequent requests check whether the backend token has expired.
+      if (token.accessTokenExpiry && Date.now() > (token.accessTokenExpiry as number)) {
+        token.accessToken       = undefined;
+        token.accessTokenExpiry = undefined;
+        token.error             = "AccessTokenExpired";
       }
       return token;
     },
@@ -88,7 +100,8 @@ export const authOptions = {
           is_superuser: (token.is_superuser as boolean) ?? false,
           plan:         (token.plan as string) ?? "free",
         };
-        session.accessToken = token.accessToken as string;
+        session.accessToken = token.accessToken as string | undefined;
+        if (token.error) session.error = token.error as "AccessTokenExpired";
       }
       return session;
     },

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Headphones,
   Volume2,
@@ -121,6 +121,10 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
   const [voiceSearch, setVoiceSearch] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const isPro = userPlan === "pro";
+
+  useEffect(() => {
+    if (voiceOpen) setTimeout(() => searchInputRef.current?.focus(), 50);
+  }, [voiceOpen]);
 
   const handleVoiceChange = (id: string, tier?: string) => {
     if (!isPro && tier === "premium") { setShowUpgrade(true); return; }
@@ -249,7 +253,6 @@ const TTSOverlay: React.FC<TTSOverlayProps> = ({
                 align="start"
                 sideOffset={8}
                 className="w-72 p-2 z-[70]"
-                onOpenAutoFocus={(e) => { e.preventDefault(); setTimeout(() => searchInputRef.current?.focus(), 0); }}
               >
                 {/* Search input */}
                 <div className="relative mb-2">

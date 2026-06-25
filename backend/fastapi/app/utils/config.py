@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     # ── JWT authentication
     jwt_secret: str = "change-me"       # Must be overridden in production.
-    jwt_expire_hours: int = 24          # Token lifetime in hours.
+    jwt_expire_hours: int = 720         # Token lifetime in hours (30 days, matches NextAuth session).
 
     # ── Redis cache
     redis_url: str = "redis://localhost:6379"
