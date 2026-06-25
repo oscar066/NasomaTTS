@@ -28,10 +28,11 @@ export const useDocumentUpload = () => {
       setIsLoading(true);
       setError(null);
 
-      const { content, pdf_url, thumbnail_url, pages } = await pdfApi.upload(file, token);
+      const { content, pdf_url, thumbnail_url, pages, total_word_count } = await pdfApi.upload(file, token);
       const title = file.name.replace(/\.[^/.]+$/, "");
+      const page_count = pages?.length ?? null;
 
-      const doc = await documentsApi.create({ title, content, pdf_url, thumbnail_url, pages }, token);
+      const doc = await documentsApi.create({ title, content, pdf_url, thumbnail_url, pages, page_count, total_word_count }, token);
       // Always update the dashboard store so any upload path (sidebar, empty
       // state, grid, etc.) immediately reflects the new document.
       addDocument(doc);

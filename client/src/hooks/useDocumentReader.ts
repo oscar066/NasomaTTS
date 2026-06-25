@@ -50,6 +50,7 @@ export interface ReaderState {
   ttsAvailable: boolean;
   isPlaying: boolean;
   speed: number;
+  totalWordCount: number | null;
   loading: boolean;
   error: string;
   currentTTSPage: number;
@@ -98,12 +99,13 @@ export const useDocumentReader = () => {
 
   const state: ReaderState = {
     // Document
-    docName:    doc.docName,
-    text:       doc.text,
-    pdfUrl:     doc.pdfUrl,
-    storedPages: doc.storedPages,
-    paragraphs: doc.paragraphs,
-    loading:    doc.loading,
+    docName:        doc.docName,
+    text:           doc.text,
+    pdfUrl:         doc.pdfUrl,
+    storedPages:    doc.storedPages,
+    paragraphs:     doc.paragraphs,
+    totalWordCount: doc.totalWordCount,
+    loading:        doc.loading,
     // Merge errors: document load errors take precedence; TTS errors shown after
     error:      doc.error || playback.state.error,
 

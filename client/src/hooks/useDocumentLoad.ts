@@ -27,7 +27,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { documentsApi, pdfProxyUrl, StoredPage } from "@/lib/api";
+import { documentsApi, pdfApi, pdfProxyUrl, StoredPage } from "@/lib/api";
 import { loadLocalProgress } from "@/lib/progress";
 import { useDocumentCacheStore, stripPagesForCache } from "@/store/documentCache";
 
@@ -38,6 +38,7 @@ export interface DocumentLoadResult {
   pdfUrl: string | null;
   storedPages: StoredPage[];
   paragraphs: string[];
+  totalWordCount: number | null;
   loading: boolean;
   error: string;
   initialPage: number;
@@ -58,6 +59,7 @@ export const useDocumentLoad = (): DocumentLoadResult => {
     pdfUrl: null,
     storedPages: [],
     paragraphs: [],
+    totalWordCount: null,
     loading: true,
     error: "",
     initialPage: 0,
@@ -79,10 +81,13 @@ export const useDocumentLoad = (): DocumentLoadResult => {
 
         // ── Fast path: Zustand document-cache store ───────────────────────
         const cached = cacheGet(documentId);
+        // Cache is valid when: entry exists, pdf_url isn't explicitly null
+        // (null = failed upload → force re-fetch), and for PDF docs the pages
+        // array is already populated from a prior parallel fetch.
         const cacheValid =
           cached &&
           cached.pdf_url !== null &&
-          (!cached.pdf_url || Array.isArray(cached.pages));
+          (!cached.pdf_url || (Array.isArray(cached.pages) && cached.pages.length > 0));
 
         if (cacheValid) {
           update({
@@ -98,14 +103,20 @@ export const useDocumentLoad = (): DocumentLoadResult => {
         }
 
         // ── Slow path: REST API ───────────────────────────────────────────
-        const doc = await documentsApi.get(documentId, session?.accessToken);
+        // Fetch document metadata and page data in parallel — pages live in
+        // a separate collection and endpoint but are needed immediately for
+        // TTS highlighting, so we avoid sequential round-trips.
+        const [doc, pages] = await Promise.all([
+          documentsApi.get(documentId, session?.accessToken),
+          pdfApi.getPages(documentId, session?.accessToken).catch(() => [] as StoredPage[]),
+        ]);
 
         cacheSet({
           id: doc.id,
           title: doc.title,
           content: doc.content,
           pdf_url: doc.pdf_url ?? null,
-          pages: stripPagesForCache(doc.pages),
+          pages: stripPagesForCache(pages),
           current_page: doc.current_page ?? 0,
         });
 
@@ -113,8 +124,9 @@ export const useDocumentLoad = (): DocumentLoadResult => {
           docName: doc.title,
           text: doc.content,
           pdfUrl: doc.pdf_url ? pdfProxyUrl(documentId) : null,
-          storedPages: doc.pages ?? [],
+          storedPages: pages,
           paragraphs: doc.content.split(/\n\s*\n/).filter(Boolean),
+          totalWordCount: doc.total_word_count ?? null,
           initialPage: localPage > 0 ? localPage : (doc.current_page ?? 0),
         });
       } catch (err: unknown) {

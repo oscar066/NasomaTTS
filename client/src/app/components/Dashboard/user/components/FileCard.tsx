@@ -43,7 +43,7 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const hasThumbnail = !!file.thumbnail_url && !thumbError;
-  const totalPages   = file.pages?.length ?? 0;
+  const totalPages   = file.page_count ?? 0;
   const progress     = totalPages > 0
     ? Math.min(100, Math.round(((file.current_page ?? 0) / totalPages) * 100))
     : 0;
@@ -107,12 +107,10 @@ export function FileCard({ file, onDelete, onRename }: FileCardProps) {
   const handlePlayClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const pagesForCache = file.pages?.map(({ page_number, text }) => ({ page_number, text })) ?? null;
     try {
       localStorage.setItem("currentDocument", JSON.stringify({
         id: file.id, content: file.content, title: file.title,
         pdf_url: file.pdf_url ?? null, thumbnail_url: file.thumbnail_url ?? null,
-        pages: pagesForCache,
       }));
     } catch {
       // Storage full — reader will fetch from the API instead
