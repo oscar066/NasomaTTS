@@ -152,13 +152,18 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   // re-run even though wordEntriesRef itself is a ref (not state).
   const [indexedCount, setIndexedCount] = useState(0);
 
-  // When the active paragraph has a bbox we render a coordinate-based overlay
-  // div instead of manipulating text-layer spans.  null = no overlay.
+  // Paragraph-level coordinate overlay — replaces text-layer span manipulation.
   const [paraOverlay, setParaOverlay] = useState<{
     pageIdx: number;
     paragraphIdx: number;
     bbox: [number, number, number, number];
     opacity: number;
+  } | null>(null);
+
+  // Word-level coordinate overlay — positioned from word_bboxes in the manifest.
+  const [wordOverlay, setWordOverlay] = useState<{
+    pageIdx: number;
+    bbox: [number, number, number, number];
   } | null>(null);
 
   // ── Lazy rendering
@@ -206,6 +211,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     setIndexedCount(0);
     setRenderedPages(new Set([0, 1, 2]));
     setParaOverlay(null);
+    setWordOverlay(null);
   }, [url]);
 
   // ── IntersectionObserver — activate pages as they approach the viewport ──
@@ -354,11 +360,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       wordEntriesRef.current[pageIndex] = entries;
       indexedCountRef.current += 1;
 
-      console.debug(
-        `[PDFViewer] page ${pageIndex} indexed: ${entries.length} words` +
-        ` from ${originalSpans.length} spans`
-      );
-
       if (indexedCountRef.current === numPagesRef.current && onPagesReady) {
         const pages: PageData[] = Array.from(
           { length: numPagesRef.current },
@@ -456,14 +457,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     // Fall back to the word-count reading window for legacy documents.
     const activeBbox = storedPages?.[page]?.paragraphs?.[pIdx]?.bbox;
 
-    console.debug(
-      `[PDFViewer highlight] page=${page} pIdx=${pIdx} wIdx=${wIdx}`,
-      `| storedPages[page] paras=${storedPages?.[page]?.paragraphs?.length ?? "none"}`,
-      `| activeBbox=${JSON.stringify(activeBbox)}`,
-      `| containerWidth=${containerWidth}`,
-      `| pageWidth=${storedPages?.[page]?.width}`,
-    );
-
     if (activeBbox) {
       // Clear any leftover window spans from a previous fallback pass.
       for (const sp of activeWindowSpansRef.current) {
@@ -486,9 +479,19 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         : 1;
 
       setParaOverlay({ pageIdx: page, paragraphIdx: pIdx, bbox: activeBbox, opacity });
+
+      // ── Word-level overlay — use word_bboxes when available.
+      // Falls back to no word overlay for legacy docs that lack word_bboxes.
+      const wordBbox = storedPages?.[page]?.paragraphs?.[pIdx]?.word_bboxes?.[wIdx];
+      if (wordBbox) {
+        setWordOverlay({ pageIdx: page, bbox: wordBbox });
+      } else {
+        setWordOverlay(null);
+      }
     } else {
-      // No bbox — clear overlay and use the reading-window fallback.
+      // No bbox — clear overlays and use the reading-window fallback.
       setParaOverlay(null);
+      setWordOverlay(null);
 
       const winStart = Math.max(0,              wordEntryIdx - WINDOW_BEFORE);
       const winEnd   = Math.min(entries.length, wordEntryIdx + WINDOW_AFTER + 1);
@@ -504,7 +507,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       activeWindowSpansRef.current = newWindowSpans;
     }
 
-    // ── 3c. Word highlight disabled — scroll only for non-bbox fallback
+    // ── 3c. Scroll — bbox path uses paraOverlayRef; fallback scrolls via span.
     if (!activeBbox) {
       const wordEntry = entries[wordEntryIdx];
       if (wordEntry) {
@@ -542,6 +545,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       activeWordSpanRef.current = null;
     }
     setParaOverlay(null);
+    setWordOverlay(null);
   }, [highlightPage]);
 
   // Render
@@ -613,27 +617,19 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                     <DocumentSkeleton width={containerWidth || 800} />
                   )}
 
-                  {/* ── Paragraph bbox overlay ──────────────────────────────
-                      Rendered as an absolutely-positioned div scaled from PDF
-                      user-space coordinates to the canvas pixel dimensions.
-                      pointer-events: none so text selection in the text layer
-                      still works; z-index: 2 keeps it above the canvas but
-                      the text layer and annotations remain interactive below. */}
+                  {/* ── Paragraph bbox overlay ─────────────────────────────
+                      Soft background tint over the active paragraph.
+                      Scaled from PDF user-space → canvas pixels.
+                      pointer-events: none preserves text-layer interactivity. */}
                   {isActivated && paraOverlay?.pageIdx === i && (() => {
                     const pd = storedPages?.[i];
-                    console.debug(
-                      `[PDFViewer render overlay] page=${i}`,
-                      `pd.width=${pd?.width} pd.height=${pd?.height}`,
-                      `bbox=${JSON.stringify(paraOverlay.bbox)}`,
-                      `containerWidth=${containerWidth}`,
-                    );
                     if (!pd?.width || !pd?.height) return null;
                     const [bx0, by0, bx1, by1] = paraOverlay.bbox;
                     const w     = containerWidth || 800;
                     const scale = w / pd.width;
                     return (
                       <div
-                        key={`${paraOverlay.pageIdx}-${paraOverlay.paragraphIdx}`}
+                        key={`para-${paraOverlay.pageIdx}-${paraOverlay.paragraphIdx}`}
                         ref={paraOverlayRef}
                         style={{
                           position:      "absolute",
@@ -650,6 +646,34 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                           opacity:       paraOverlay.opacity,
                           animation:     "nasoma-bbox-fadein 0.25s ease forwards",
                           transition:    "opacity 0.15s ease",
+                        }}
+                      />
+                    );
+                  })()}
+
+                  {/* ── Word bbox overlay ───────────────────────────────────
+                      Precise highlight on the word currently being spoken.
+                      Sits above the paragraph tint (z-index 11). Only rendered
+                      for documents with word_bboxes in their manifest. */}
+                  {isActivated && wordOverlay?.pageIdx === i && (() => {
+                    const pd = storedPages?.[i];
+                    if (!pd?.width) return null;
+                    const [wx0, wy0, wx1, wy1] = wordOverlay.bbox;
+                    const w     = containerWidth || 800;
+                    const scale = w / pd.width;
+                    return (
+                      <div
+                        style={{
+                          position:      "absolute",
+                          left:          wx0 * scale,
+                          top:           wy0 * scale,
+                          width:         (wx1 - wx0) * scale,
+                          height:        (wy1 - wy0) * scale,
+                          background:    "rgba(99, 102, 241, 0.55)",
+                          borderRadius:  "3px",
+                          pointerEvents: "none",
+                          zIndex:        11,
+                          transition:    "left 0.07s ease, top 0.07s ease, width 0.07s ease",
                         }}
                       />
                     );
