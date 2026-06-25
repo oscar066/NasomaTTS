@@ -23,7 +23,8 @@ services:
     ports:
       - "3001:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     networks:
       - nasoma-network
     develop:
@@ -67,6 +68,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - nasoma-network
     develop:
