@@ -109,7 +109,14 @@ class KokoroService:
         if not self._client:
             return None
         if not self._available:
-            if not await self._probe():
+            # Modal serverless containers cold-start in 10-30s. Retry patiently
+            # before giving up so the first request after a cold start succeeds.
+            for attempt in range(4):
+                if await self._probe():
+                    break
+                if attempt < 3:
+                    await asyncio.sleep(10)
+            if not self._available:
                 return None
         kokoro_id = VOICE_REGISTRY.get(voice, {}).get("kokoro_id", "af_heart")
         try:

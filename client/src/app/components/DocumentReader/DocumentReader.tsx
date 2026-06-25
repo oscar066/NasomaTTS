@@ -59,6 +59,7 @@ const DocumentReader: React.FC = () => {
       isPlaying,
       speed,
       totalWordCount,
+      ttsAvailable,
       loading,
       error,
       currentTTSPage,
@@ -233,6 +234,7 @@ const DocumentReader: React.FC = () => {
         voices={voices}
         speed={speed}
         totalWordCount={totalWordCount}
+        ttsAvailable={ttsAvailable}
         skipUnit={isPdfMode ? "page" : "paragraph"}
         onPlay={handlePlay}
         onStop={handleStop}

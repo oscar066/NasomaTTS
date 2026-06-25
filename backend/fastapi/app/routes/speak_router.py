@@ -227,8 +227,8 @@ async def paragraph_audio(
         if plan != "pro":
             raise HTTPException(status_code=403, detail="Premium voices require a Pro subscription.")
 
-    if not tts_service.available:
-        return {"tts_available": False, "fallback": "web_speech_api"}
+    # Availability is checked lazily inside synthesize_paragraph — Kokoro may
+    # be cold-starting (Modal serverless) and will be probed with patience there.
 
     try:
         doc = await NasomaDocument.get(PydanticObjectId(doc_id))
