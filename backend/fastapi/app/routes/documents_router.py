@@ -5,10 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..utils.cache import TTL_DOC_LIST, TTL_DOCUMENT, cache_del, cache_get, cache_set
 from ..models.document import NasomaDocument
+from ..models.document_page import NasomaDocumentPage
 from ..models.user import User
 from ..utils.deps import get_current_user
 from ..schemas.schema import DocumentCreate, DocumentRename, ProgressUpdate, StatusUpdate
 from ..utils.logger import setup_logger
+
+TTL_PAGES = 86400  # pages never change after upload — cache for 24 h
 
 logger = setup_logger("nasoma.routes.documents")
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -25,7 +28,8 @@ def _fmt_doc(doc: NasomaDocument, author: dict) -> dict:
         "content": doc.content,
         "pdf_url": doc.pdf_url,
         "thumbnail_url": doc.thumbnail_url,
-        "pages": doc.pages,
+        "page_count": doc.page_count,
+        "total_word_count": doc.total_word_count,
         "current_page": doc.current_page,
         "reading_status": doc.reading_status,
         "author": author,
@@ -73,6 +77,42 @@ async def documents_by_author(email: str):
     ]
 
 
+@router.get("/{doc_id}/pages")
+async def get_document_pages(doc_id: str):
+    """Return all pages for a document, including paragraph and word-level data.
+
+    Served from Redis on cache hits (TTL 24 h).  Pages are immutable after
+    upload so the cache is only invalidated on document deletion.
+    """
+    try:
+        oid = PydanticObjectId(doc_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid document ID")
+
+    cache_key = f"cache:pages:{doc_id}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    pages = await NasomaDocumentPage.find(
+        NasomaDocumentPage.doc_id == oid
+    ).sort("+page_number").to_list()
+
+    result = [
+        {
+            "page_number": p.page_number,
+            "text":        p.text,
+            "paragraphs":  p.paragraphs,
+            "width":       p.width,
+            "height":      p.height,
+        }
+        for p in pages
+    ]
+
+    await cache_set(cache_key, result, TTL_PAGES)
+    return result
+
+
 @router.get("/{doc_id}")
 async def get_document(doc_id: str):
     try:
@@ -102,16 +142,39 @@ async def create_document(data: DocumentCreate, current_user: User = Depends(get
     if len(data.title) > 200:
         raise HTTPException(status_code=400, detail="Title too long (max 200 characters)")
 
+    page_count = len(data.pages) if data.pages else None
+
     doc = await NasomaDocument(
         title=data.title,
         content=data.content,
         pdf_url=data.pdf_url,
         thumbnail_url=data.thumbnail_url,
-        pages=data.pages,
+        page_count=page_count,
+        total_word_count=data.total_word_count,
         author=current_user.id,
     ).insert()
 
-    logger.info("Document created: id=%s title=%r user=%s", doc.id, doc.title, current_user.id)
+    # Save page data to the dedicated collection so NasomaDocument stays small.
+    if data.pages:
+        try:
+            await NasomaDocumentPage.insert_many([
+                NasomaDocumentPage(
+                    doc_id=doc.id,
+                    page_number=page["page_number"],
+                    text=page.get("text", ""),
+                    paragraphs=page.get("paragraphs", []),
+                    width=page.get("width", 0.0),
+                    height=page.get("height", 0.0),
+                )
+                for page in data.pages
+            ])
+        except Exception as e:
+            logger.error("Failed to save pages for doc %s: %s", doc.id, e)
+
+    logger.info(
+        "Document created: id=%s title=%r pages=%s user=%s",
+        doc.id, doc.title, page_count, current_user.id,
+    )
     await cache_del(f"cache:docs:user:{str(current_user.id)}")
     return _fmt_doc(doc, _fmt_author(current_user))
 
@@ -130,8 +193,13 @@ async def delete_document(doc_id: str, current_user: User = Depends(get_current_
         logger.warning("Unauthorized delete attempt: user=%s doc=%s", current_user.id, doc_id)
         raise HTTPException(status_code=403, detail="Not authorized to delete this document")
 
+    await NasomaDocumentPage.find(NasomaDocumentPage.doc_id == oid).delete()
     await doc.delete()
-    await cache_del(f"cache:doc:{doc_id}", f"cache:docs:user:{str(current_user.id)}")
+    await cache_del(
+        f"cache:doc:{doc_id}",
+        f"cache:pages:{doc_id}",
+        f"cache:docs:user:{str(current_user.id)}",
+    )
     logger.info("Document deleted: id=%s by user=%s", doc_id, current_user.id)
     return {"success": True}
 

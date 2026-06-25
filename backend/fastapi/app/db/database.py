@@ -2,6 +2,7 @@ import beanie
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from ..models.document import NasomaDocument
+from ..models.document_page import NasomaDocumentPage
 from ..models.user import User
 from ..utils.config import settings
 from ..utils.logger import setup_logger
@@ -16,7 +17,7 @@ async def connect_db() -> None:
     _client = AsyncIOMotorClient(settings.mongodb_url)
     await beanie.init_beanie(
         database=_client[settings.mongodb_db],
-        document_models=[User, NasomaDocument],
+        document_models=[User, NasomaDocument, NasomaDocumentPage],
     )
     logger.info("Connected to MongoDB at %s (db: %s)", settings.mongodb_url, settings.mongodb_db)
 

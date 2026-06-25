@@ -29,6 +29,7 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from ..models.document import NasomaDocument
+from ..models.document_page import NasomaDocumentPage
 from ..services.tts import tts_service
 from ..utils.logger import setup_logger
 
@@ -219,18 +220,21 @@ async def paragraph_audio(
     except Exception:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    if not doc or not doc.pages:
-        raise HTTPException(status_code=404, detail="Document not found or has no page data")
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
 
-    if page >= len(doc.pages):
+    # Fetch the requested page from the dedicated collection (page_number is 1-based).
+    page_doc = await NasomaDocumentPage.find_one(
+        NasomaDocumentPage.doc_id == doc.id,
+        NasomaDocumentPage.page_number == page + 1,
+    )
+    if not page_doc:
         raise HTTPException(status_code=400, detail="Page index out of range")
 
-    page_data = doc.pages[page]
-    paragraphs = page_data.get("paragraphs") or []
+    paragraphs = page_doc.paragraphs or []
 
     if not paragraphs:
-        # Fallback: treat the whole page text as a single paragraph.
-        text = page_data.get("text", "").strip()
+        text = page_doc.text.strip()
         if not text:
             raise HTTPException(status_code=400, detail="Page has no speakable content")
         paragraphs = [{"text": text}]
@@ -244,11 +248,24 @@ async def paragraph_audio(
     if wav is None:
         raise HTTPException(status_code=500, detail="Audio generation failed")
 
-    # Schedule prefetch of the next 3 paragraphs across page boundaries.
+    # Prefetch the next 3 paragraphs across page boundaries.
+    # Fetch up to 3 subsequent pages in one query to avoid per-page round-trips.
+    next_page_docs = await NasomaDocumentPage.find(
+        NasomaDocumentPage.doc_id == doc.id,
+        NasomaDocumentPage.page_number >= page + 1,   # current page onwards (1-based)
+        NasomaDocumentPage.page_number <= page + 4,   # current + 3 pages max
+    ).sort("+page_number").to_list()
+
+    # Map 0-based page index → page doc for the loop below.
+    page_lookup = {pd.page_number - 1: pd for pd in next_page_docs}
+
     upcoming: list[tuple[int, int, str]] = []
     p, q = page, para + 1
-    while len(upcoming) < 3 and p < len(doc.pages):
-        page_paras = doc.pages[p].get("paragraphs") or []
+    while len(upcoming) < 3:
+        pd = page_lookup.get(p)
+        if pd is None:
+            break
+        page_paras = pd.paragraphs or []
         if not page_paras:
             p += 1
             q = 0

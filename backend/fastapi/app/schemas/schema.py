@@ -13,16 +13,21 @@ class DocumentCreate(BaseModel):
             and as a fallback when per-page data is unavailable.
         pdf_url: MinIO object key for the original PDF binary.  ``None`` for
             plain-text documents or when the MinIO upload failed.
-        pages: Per-page text extracted by PyMuPDF at upload time.  Each entry
-            is ``{"page_number": int, "text": str}``.  ``None`` for legacy
-            documents uploaded before per-page storage was introduced.
+        pages: Per-page data extracted by PyMuPDF at upload time.  Each entry
+            includes ``page_number``, ``text``, ``paragraphs`` (with word-level
+            bboxes), ``width``, and ``height``.  ``None`` for legacy documents.
+        total_word_count: Total words across all pages, computed at upload time.
+            Used for reading-time estimates and statistics.  ``None`` for legacy
+            plain-text documents.
     """
 
     title: str
     content: str
     pdf_url: str | None = None
-    thumbnail_url: str | None = None  # MinIO key for the first-page JPEG thumbnail.
-    pages: list | None = None         # [{"page_number": int, "text": str}]
+    thumbnail_url: str | None = None
+    pages: list | None = None          # received from client, saved to NasomaDocumentPage
+    page_count: int | None = None
+    total_word_count: int | None = None
 
 
 class DocumentRename(BaseModel):
