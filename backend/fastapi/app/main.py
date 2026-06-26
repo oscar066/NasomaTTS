@@ -13,8 +13,8 @@ from .utils.config import settings
 from .utils.rate_limit import limiter
 from .db.database import close_db, connect_db, get_db
 from .migrations.runner import run_migrations
-from .routes import admin_router, auth_router, documents_router, pdf_router, speak_router, voices_router
-from .services.tts import tts_service
+from .routes import admin_router, auth_router, classics_router, documents_router, leaderboard_router, pdf_router, speak_router, voices_router
+from .services.tts_service import tts_service
 from .utils.logger import setup_logger
 from .workers import pool as worker_pool
 
@@ -68,7 +68,9 @@ async def log_requests(request: Request, call_next):
 # Routers
 app.include_router(auth_router.router)
 app.include_router(admin_router.router)
+app.include_router(classics_router.router)
 app.include_router(documents_router.router)
+app.include_router(leaderboard_router.router)
 app.include_router(pdf_router.router)
 app.include_router(voices_router.router)
 app.include_router(speak_router.router)
