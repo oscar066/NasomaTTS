@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Home from "./components/Home/Home";
 
 export const metadata: Metadata = {
-  title: "Me Nasoma — Turn Any Document Into Audio",
+  title: "Me Nasoma",
   description:
-    "Upload any PDF or document and listen to it in natural, lifelike audio. Perfect for commuters, students, and anyone who wants to learn on the go.",
+    "Read deeper, understand more. Sync audio and visual highlighting to stay focused, explore classic literature, and track your reading with the community.",
 };
 
 export default function HomePage() {

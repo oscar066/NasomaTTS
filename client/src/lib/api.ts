@@ -172,6 +172,8 @@ export const adminApi = {
 
 export interface StoredParagraph {
   text: string;
+  /** "heading" for chapter/section titles, "body" for regular paragraphs. */
+  type?: "heading" | "body";
   /**
    * Paragraph bounding box in PDF user-space coordinates [x0, y0, x1, y1]
    * (points at 72 DPI, origin top-left).  Tight bbox computed from constituent
@@ -303,7 +305,25 @@ export const voicesApi = {
     request<{ voices: Voice[]; tts_available: boolean }>("/voices"),
 };
 
-// ── User preferences
+// ── User stats
+
+export interface UserStats {
+  words_read: number;
+  rank: number | null;
+}
+
+export interface ActivityDay {
+  date: string;       // "YYYY-MM-DD"
+  words_read: number;
+}
+
+export const statsApi = {
+  get: (token: string) => request<UserStats>("/users/me/stats", {}, token),
+  activity: (token: string) =>
+    request<{ days: ActivityDay[] }>("/users/me/reading-activity", {}, token),
+};
+
+// User preferences
 
 export const preferencesApi = {
   save: (voice: string | null, speed: number | null, token: string) =>
@@ -316,7 +336,30 @@ export const preferencesApi = {
     request<{ pref_voice: string | null; pref_speed: number | null }>("/users/me", {}, token),
 };
 
-// ── PDF proxy 
+// Leaderboard
+export interface LeaderboardEntry {
+  rank: number;
+  user_id: string;
+  username: string;
+  avatar: string;
+  plan: string;
+  doc_count: number;
+  finished_count: number;
+  total_words: number;
+  is_me: boolean;
+}
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  me: LeaderboardEntry | null;
+}
+
+export const leaderboardApi = {
+  get: (token: string) =>
+    request<LeaderboardResponse>("/leaderboard", {}, token),
+};
+
+// PDF proxy
 
 export function pdfProxyUrl(docId: string): string {
   return `${BASE}/pdf/${docId}`;
@@ -326,7 +369,7 @@ export function thumbnailProxyUrl(docId: string): string {
   return `${BASE}/pdf/${docId}/thumbnail`;
 }
 
-// ── Speak (POST → streaming SSE response)
+// Speak (POST → streaming SSE response)
 // Using POST avoids URL-length limits that break long documents with GET params.
 
 export function speakStream(
@@ -368,3 +411,39 @@ export function fetchParagraphAudio(
     signal,
   });
 }
+
+
+// Classics (Project Gutenberg)
+
+export interface GutenbergAuthor {
+  name: string;
+  birth_year: number | null;
+  death_year: number | null;
+}
+
+export interface GutenbergBook {
+  id: number;
+  title: string;
+  authors: GutenbergAuthor[];
+  subjects: string[];
+  formats: Record<string, string>;
+  download_count: number;
+}
+
+export interface ClassicsResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: GutenbergBook[];
+}
+
+export const classicsApi = {
+  browse: (token: string, search = "", page = 1) =>
+    request<ClassicsResponse>(
+      `/classics?search=${encodeURIComponent(search)}&page=${page}`,
+      {},
+      token,
+    ),
+  import: (gutenbergId: number, token: string) =>
+    request<Document>(`/classics/${gutenbergId}/import`, { method: "POST" }, token),
+};

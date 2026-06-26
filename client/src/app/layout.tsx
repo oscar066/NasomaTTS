@@ -101,6 +101,41 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
 };
 
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://me-nasoma.com/#website",
+      url: "https://me-nasoma.com",
+      name: "Me Nasoma",
+      description:
+        "Read deeper, understand more. Sync audio and visual highlighting to stay focused, explore classic literature, and track your reading with the community.",
+      potentialAction: {
+        "@type": "SearchAction",
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: "https://me-nasoma.com/?q={search_term_string}",
+        },
+        "query-input": "required name=search_term_string",
+      },
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://me-nasoma.com/#organization",
+      name: "Me Nasoma",
+      url: "https://me-nasoma.com",
+      logo: {
+        "@type": "ImageObject",
+        url: "https://me-nasoma.com/icon-512.png",
+        width: 512,
+        height: 512,
+      },
+      sameAs: ["https://twitter.com/menasoma"],
+    },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -108,6 +143,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="scroll-smooth">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} ${plusJakartaSans.variable} antialiased`}>
         <Providers>
           {children}
