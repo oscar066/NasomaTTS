@@ -1,24 +1,4 @@
-"""
-Text-to-speech streaming routes.
-
-Implements two TTS endpoints:
-
-- **SSE word-timing stream** (``POST /speak``) — Splits the input text into
-  paragraphs and words, then emits Server-Sent Events (SSE) that carry the
-  current word index, a sliding word window, and an absolute word counter.
-  The client uses these events to drive word-level highlight synchronisation
-  in the reader UI.  Audio is produced by the browser's Web Speech API or the
-  NeuTTS engine (handled client-side or via ``/tts/audio``).
-
-- **WAV audio generation** (``POST /tts/audio``) — Synthesises a WAV file
-  using the NeuTTS Air model and streams it back.  Falls back gracefully when
-  NeuTTS is unavailable.
-
-Routes
-------
-POST /speak         — Stream SSE word-timing events for the given text.
-POST /tts/audio     — Return synthesised WAV audio for the given text.
-"""
+"""TTS streaming routes — SSE word-timing and WAV audio."""
 
 import asyncio
 import json
@@ -26,12 +6,12 @@ import json
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
-from pydantic import BaseModel
 
 from ..models.document import NasomaDocument
 from ..models.document_page import NasomaDocumentPage
-from ..services.tts import tts_service
-from ..services.voices import VOICE_REGISTRY
+from ..schemas.speak import SpeakRequest
+from ..services.tts_service import tts_service
+from ..services.voices_service import VOICE_REGISTRY
 from ..utils.deps import get_optional_user
 from ..utils.logger import setup_logger
 
@@ -41,50 +21,8 @@ logger = setup_logger("nasoma.routes.speak")
 router = APIRouter(tags=["speak"])
 
 
-class SpeakRequest(BaseModel):
-    """Payload for ``POST /speak``.
-
-    Attributes:
-        text: The full text to be read aloud.  May contain multiple paragraphs
-            separated by blank lines (``\\n\\n``).
-        voice: Voice identifier recognised by the TTS service (default: dave).
-        wpm: Target reading speed in words per minute — controls the delay
-            between SSE events so the client highlight matches audio pace.
-    """
-
-    text: str
-    voice: str = "dave"
-    wpm: int = 150
-
-
 @router.post("/speak")
 async def speak(request: Request, payload: SpeakRequest):
-    """Stream word-timing SSE events for the given text.
-
-    The response is a ``text/event-stream`` where each ``data:`` line is a
-    JSON object with the following fields:
-
-    - ``paragraphIndex`` — 0-based index of the current paragraph.
-    - ``currentWordIndex`` — 0-based word index within the paragraph
-      (``-1`` on ``newParagraph`` events).
-    - ``absoluteWordIndex`` — cumulative word index across all paragraphs.
-    - ``wordWindow`` — a 5-word sliding window centred on the current word,
-      used to display context around the highlighted word.
-    - ``windowStart`` — index of the first word in ``wordWindow`` within the
-      paragraph, so the client can map back to absolute positions.
-    - ``newParagraph`` — ``true`` when the event marks a paragraph boundary.
-    - ``done`` — ``true`` on the final event signalling stream completion.
-
-    The client is expected to disconnect when TTS stops; the generator checks
-    ``request.is_disconnected()`` each iteration and exits early.
-
-    Args:
-        request: The raw FastAPI request, used to detect client disconnections.
-        payload: Validated request body containing text, voice, and WPM.
-
-    Raises:
-        HTTPException 400: If ``text`` is empty or contains no speakable content.
-    """
     text, voice, wpm = payload.text, payload.voice, payload.wpm
     if not text:
         raise HTTPException(status_code=400, detail="text is required")
@@ -93,20 +31,13 @@ async def speak(request: Request, payload: SpeakRequest):
     if not paragraphs:
         raise HTTPException(status_code=400, detail="No content to speak")
 
-    logger.info(
-        "SSE stream started: voice=%s wpm=%d paragraphs=%d",
-        voice,
-        wpm,
-        len(paragraphs),
-    )
+    logger.info("SSE stream started: voice=%s wpm=%d paragraphs=%d", voice, wpm, len(paragraphs))
 
-    # Delay between SSE events derived from target WPM.
     ms_per_word = 60_000 / wpm
-    window_size = 5  # Words visible in the highlight context window.
+    window_size = 5
 
     async def event_stream():
-        """Async generator that yields SSE-formatted strings."""
-        abs_word_idx = 0  # Running total of words emitted across all paragraphs.
+        abs_word_idx = 0
 
         for p_idx, paragraph in enumerate(paragraphs):
             if await request.is_disconnected():
@@ -116,84 +47,45 @@ async def speak(request: Request, payload: SpeakRequest):
             if not words:
                 continue
 
-            # Emit a paragraph-boundary event first so the client can reset
-            # its highlight state before individual word events arrive.
-            para_payload = json.dumps({
-                'paragraphIndex': p_idx,
-                'currentWordIndex': -1,
-                'absoluteWordIndex': abs_word_idx,
-                'wordWindow': [],
-                'windowStart': 0,
-                'fullParagraph': ' '.join(words),
-                'newParagraph': True,
-            })
-            yield f"data: {para_payload}\n\n"
-
-            # Brief pause so the client can render the paragraph highlight
-            # before the first word event arrives.
+            yield f"data: {json.dumps({'paragraphIndex': p_idx, 'currentWordIndex': -1, 'absoluteWordIndex': abs_word_idx, 'wordWindow': [], 'windowStart': 0, 'fullParagraph': ' '.join(words), 'newParagraph': True})}\n\n"
             await asyncio.sleep(ms_per_word / 1000 * 0.4)
 
             for word_idx in range(len(words)):
                 if await request.is_disconnected():
                     return
 
-                # Build a centred sliding window; clamp at paragraph boundaries.
-                half = window_size // 2
+                half  = window_size // 2
                 start = max(0, word_idx - half)
-                end = min(len(words) - 1, word_idx + half)
+                end   = min(len(words) - 1, word_idx + half)
 
-                payload = json.dumps({
-                    'paragraphIndex': p_idx,
-                    'currentWordIndex': word_idx,
-                    'absoluteWordIndex': abs_word_idx,
-                    'currentWord': words[word_idx],
-                    'wordWindow': words[start:end + 1],
-                    'windowStart': start,
-                    'fullParagraph': ' '.join(words),
-                    'newParagraph': False,
-                })
-                yield f"data: {payload}\n\n"
+                yield f"data: {json.dumps({'paragraphIndex': p_idx, 'currentWordIndex': word_idx, 'absoluteWordIndex': abs_word_idx, 'currentWord': words[word_idx], 'wordWindow': words[start:end + 1], 'windowStart': start, 'fullParagraph': ' '.join(words), 'newParagraph': False})}\n\n"
 
                 abs_word_idx += 1
                 await asyncio.sleep(ms_per_word / 1000)
 
-        # Signal to the client that all words have been emitted.
         yield f"data: {json.dumps({'done': True})}\n\n"
 
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            # Prevent Nginx from buffering SSE responses, which would delay
-            # delivery of word events to the client.
-            "X-Accel-Buffering": "no",
-        },
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )
 
 
 @router.post("/tts/audio")
 async def generate_audio(text: str, voice: str = "sophia", current_user=Depends(get_optional_user)):
-    """Synthesise and return WAV audio for the given text.
-
-    Returns a JSON fallback hint when the Kokoro sidecar is unavailable so the
-    client can fall back to the browser's Web Speech API automatically.
-    """
     if voice in PREMIUM_VOICES:
-        plan = getattr(current_user, "plan", None) if current_user else None
-        if plan != "pro":
+        if getattr(current_user, "plan", None) != "pro":
             raise HTTPException(status_code=403, detail="Premium voices require a Pro subscription.")
 
     if not tts_service.available:
-        logger.info("TTS audio requested but Kokoro unavailable — returning fallback hint")
         return {"tts_available": False, "fallback": "web_speech_api"}
 
     audio_bytes = await tts_service.synthesize(text, voice)
     if audio_bytes is None:
         raise HTTPException(status_code=500, detail="Audio generation failed")
 
-    logger.info("TTS audio generated: voice=%s bytes=%d", voice, len(audio_bytes))
+    logger.info("TTS audio: voice=%s bytes=%d", voice, len(audio_bytes))
     return Response(content=audio_bytes, media_type="audio/wav")
 
 
@@ -205,30 +97,9 @@ async def paragraph_audio(
     voice: str = Query("sophia"),
     current_user=Depends(get_optional_user),
 ):
-    """Return synthesised WAV for a specific paragraph in a stored document.
-
-    Checks the in-memory cache first (instant on a cache hit).  On a miss,
-    synthesises via the Kokoro sidecar and caches the result.  After serving
-    the requested paragraph, schedules background synthesis of the next 5
-    paragraphs (across page boundaries) so they are ready before the client
-    asks for them.
-
-    Args:
-        doc_id:  MongoDB document ID.
-        page:    0-based page index within ``doc.pages``.
-        para:    0-based paragraph index within that page's ``paragraphs`` list.
-        voice:   Voice ID (``sophia`` or ``adam``).
-
-    Returns:
-        ``audio/wav`` binary, or a JSON fallback hint when Kokoro is unavailable.
-    """
     if voice in PREMIUM_VOICES:
-        plan = getattr(current_user, "plan", None) if current_user else None
-        if plan != "pro":
+        if getattr(current_user, "plan", None) != "pro":
             raise HTTPException(status_code=403, detail="Premium voices require a Pro subscription.")
-
-    # Availability is checked lazily inside synthesize_paragraph — Kokoro may
-    # be cold-starting (Modal serverless) and will be probed with patience there.
 
     try:
         doc = await NasomaDocument.get(PydanticObjectId(doc_id))
@@ -238,7 +109,6 @@ async def paragraph_audio(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Fetch the requested page from the dedicated collection (page_number is 1-based).
     page_doc = await NasomaDocumentPage.find_one(
         NasomaDocumentPage.doc_id == doc.id,
         NasomaDocumentPage.page_number == page + 1,
@@ -247,7 +117,6 @@ async def paragraph_audio(
         raise HTTPException(status_code=400, detail="Page index out of range")
 
     paragraphs = page_doc.paragraphs or []
-
     if not paragraphs:
         text = page_doc.text.strip()
         if not text:
@@ -257,25 +126,21 @@ async def paragraph_audio(
     if para >= len(paragraphs):
         raise HTTPException(status_code=400, detail="Paragraph index out of range")
 
-    text = paragraphs[para]["text"]
-    wav = await tts_service.synthesize_paragraph(doc_id, page, para, text, voice)
-
+    wav = await tts_service.synthesize_paragraph(doc_id, page, para, paragraphs[para]["text"], voice)
     if wav is None:
         raise HTTPException(status_code=500, detail="Audio generation failed")
 
-    # Prefetch the next 3 paragraphs across page boundaries.
-    # Fetch up to 3 subsequent pages in one query to avoid per-page round-trips.
+    # Prefetch next 3 paragraphs across page boundaries.
     next_page_docs = await NasomaDocumentPage.find(
         NasomaDocumentPage.doc_id == doc.id,
-        NasomaDocumentPage.page_number >= page + 1,   # current page onwards (1-based)
-        NasomaDocumentPage.page_number <= page + 4,   # current + 3 pages max
+        NasomaDocumentPage.page_number >= page + 1,
+        NasomaDocumentPage.page_number <= page + 4,
     ).sort("+page_number").to_list()
 
-    # Map 0-based page index → page doc for the loop below.
     page_lookup = {pd.page_number - 1: pd for pd in next_page_docs}
-
     upcoming: list[tuple[int, int, str]] = []
     p, q = page, para + 1
+
     while len(upcoming) < 3:
         pd = page_lookup.get(p)
         if pd is None:
@@ -294,11 +159,6 @@ async def paragraph_audio(
 
     if upcoming:
         tts_service.schedule_prefetch(doc_id, upcoming, voice)
-        logger.debug("Prefetch scheduled: %d para(s) after %s p%d:q%d", len(upcoming), doc_id, page, para)
 
     logger.info("Para audio: doc=%s page=%d para=%d voice=%s bytes=%d", doc_id, page, para, voice, len(wav))
-    return Response(
-        content=wav,
-        media_type="audio/wav",
-        headers={"Cache-Control": "private, max-age=3600"},
-    )
+    return Response(content=wav, media_type="audio/wav", headers={"Cache-Control": "private, max-age=3600"})

@@ -1,41 +1,25 @@
-from datetime import datetime
+"""Document CRUD and progress routes."""
+
+from datetime import datetime, timezone
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..utils.cache import TTL_DOC_LIST, TTL_DOCUMENT, cache_del, cache_get, cache_set
 from ..models.document import NasomaDocument
 from ..models.document_page import NasomaDocumentPage
+from ..models.reading_activity import ReadingActivity
 from ..models.user import User
+from ..schemas.document import DocumentCreate, DocumentRename, ProgressUpdate, StatusUpdate
+from ..services.document_service import fmt_author, fmt_doc
+from ..utils.cache import TTL_DOC_LIST, TTL_DOCUMENT, cache_del, cache_get, cache_set
 from ..utils.deps import get_current_user
-from ..schemas.schema import DocumentCreate, DocumentRename, ProgressUpdate, StatusUpdate
 from ..utils.logger import setup_logger
-
-TTL_PAGES = 86400  # pages never change after upload — cache for 24 h
 
 logger = setup_logger("nasoma.routes.documents")
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-
-def _fmt_author(user: User) -> dict:
-    return {"id": str(user.id), "username": user.username, "email": user.email}
-
-
-def _fmt_doc(doc: NasomaDocument, author: dict) -> dict:
-    return {
-        "id": str(doc.id),
-        "title": doc.title,
-        "content": doc.content,
-        "pdf_url": doc.pdf_url,
-        "thumbnail_url": doc.thumbnail_url,
-        "page_count": doc.page_count,
-        "total_word_count": doc.total_word_count,
-        "current_page": doc.current_page,
-        "reading_status": doc.reading_status,
-        "author": author,
-        "createdAt": doc.created_at,
-        "updatedAt": doc.updated_at,
-    }
+FREE_DOCUMENT_LIMIT = 5
+TTL_PAGES = 86400
 
 
 @router.get("")
@@ -43,24 +27,18 @@ async def list_documents():
     docs = []
     for doc in await NasomaDocument.find_all().to_list():
         author = await User.get(doc.author)
-        docs.append(_fmt_doc(doc, _fmt_author(author) if author else {"id": str(doc.author), "username": "deleted", "email": ""}))
+        docs.append(fmt_doc(doc, fmt_author(author) if author else {"id": str(doc.author), "username": "deleted", "email": ""}))
     return docs
 
 
 @router.get("/me")
 async def my_documents(current_user: User = Depends(get_current_user)):
-    user_id = str(current_user.id)
-    cache_key = f"cache:docs:user:{user_id}"
-
+    cache_key = f"cache:docs:user:{str(current_user.id)}"
     cached = await cache_get(cache_key)
     if cached is not None:
         return cached
-
-    docs = [
-        _fmt_doc(doc, _fmt_author(current_user))
-        for doc in await NasomaDocument.find(NasomaDocument.author == current_user.id).to_list()
-    ]
-
+    docs = [fmt_doc(doc, fmt_author(current_user))
+            for doc in await NasomaDocument.find(NasomaDocument.author == current_user.id).to_list()]
     await cache_set(cache_key, docs, TTL_DOC_LIST)
     return docs
 
@@ -70,20 +48,12 @@ async def documents_by_author(email: str):
     user = await User.find_one(User.email == email.lower())
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
-    return [
-        _fmt_doc(doc, _fmt_author(user))
-        for doc in await NasomaDocument.find(NasomaDocument.author == user.id).to_list()
-    ]
+    return [fmt_doc(doc, fmt_author(user))
+            for doc in await NasomaDocument.find(NasomaDocument.author == user.id).to_list()]
 
 
 @router.get("/{doc_id}/pages")
 async def get_document_pages(doc_id: str):
-    """Return all pages for a document, including paragraph and word-level data.
-
-    Served from Redis on cache hits (TTL 24 h).  Pages are immutable after
-    upload so the cache is only invalidated on document deletion.
-    """
     try:
         oid = PydanticObjectId(doc_id)
     except Exception:
@@ -99,16 +69,10 @@ async def get_document_pages(doc_id: str):
     ).sort("+page_number").to_list()
 
     result = [
-        {
-            "page_number": p.page_number,
-            "text":        p.text,
-            "paragraphs":  p.paragraphs,
-            "width":       p.width,
-            "height":      p.height,
-        }
+        {"page_number": p.page_number, "text": p.text,
+         "paragraphs": p.paragraphs, "width": p.width, "height": p.height}
         for p in pages
     ]
-
     await cache_set(cache_key, result, TTL_PAGES)
     return result
 
@@ -130,12 +94,9 @@ async def get_document(doc_id: str):
         raise HTTPException(status_code=404, detail="Document not found")
 
     author = await User.get(doc.author)
-    result = _fmt_doc(doc, _fmt_author(author) if author else {"id": str(doc.author), "username": "deleted", "email": ""})
+    result = fmt_doc(doc, fmt_author(author) if author else {"id": str(doc.author), "username": "deleted", "email": ""})
     await cache_set(cache_key, result, TTL_DOCUMENT)
     return result
-
-
-FREE_DOCUMENT_LIMIT = 5
 
 
 @router.post("")
@@ -153,19 +114,16 @@ async def create_document(data: DocumentCreate, current_user: User = Depends(get
                 detail=f"Free plan limit reached ({FREE_DOCUMENT_LIMIT} documents). Upgrade to Pro for unlimited uploads.",
             )
 
-    page_count = len(data.pages) if data.pages else None
-
     doc = await NasomaDocument(
         title=data.title,
         content=data.content,
         pdf_url=data.pdf_url,
         thumbnail_url=data.thumbnail_url,
-        page_count=page_count,
+        page_count=len(data.pages) if data.pages else None,
         total_word_count=data.total_word_count,
         author=current_user.id,
     ).insert()
 
-    # Save page data to the dedicated collection so NasomaDocument stays small.
     if data.pages:
         try:
             await NasomaDocumentPage.insert_many([
@@ -182,12 +140,9 @@ async def create_document(data: DocumentCreate, current_user: User = Depends(get
         except Exception as e:
             logger.error("Failed to save pages for doc %s: %s", doc.id, e)
 
-    logger.info(
-        "Document created: id=%s title=%r pages=%s user=%s",
-        doc.id, doc.title, page_count, current_user.id,
-    )
+    logger.info("Document created: id=%s title=%r user=%s", doc.id, doc.title, current_user.id)
     await cache_del(f"cache:docs:user:{str(current_user.id)}")
-    return _fmt_doc(doc, _fmt_author(current_user))
+    return fmt_doc(doc, fmt_author(current_user))
 
 
 @router.delete("/{doc_id}")
@@ -201,7 +156,6 @@ async def delete_document(doc_id: str, current_user: User = Depends(get_current_
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     if doc.author != current_user.id:
-        logger.warning("Unauthorized delete attempt: user=%s doc=%s", current_user.id, doc_id)
         raise HTTPException(status_code=403, detail="Not authorized to delete this document")
 
     await NasomaDocumentPage.find(NasomaDocumentPage.doc_id == oid).delete()
@@ -211,7 +165,7 @@ async def delete_document(doc_id: str, current_user: User = Depends(get_current_
         f"cache:pages:{doc_id}",
         f"cache:docs:user:{str(current_user.id)}",
     )
-    logger.info("Document deleted: id=%s by user=%s", doc_id, current_user.id)
+    logger.info("Document deleted: id=%s user=%s", doc_id, current_user.id)
     return {"success": True}
 
 
@@ -253,10 +207,26 @@ async def update_progress(doc_id: str, data: ProgressUpdate, current_user: User 
     if doc.author != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to update this document")
 
+    old_page = doc.current_page
     await doc.set({NasomaDocument.current_page: data.current_page, NasomaDocument.updated_at: datetime.utcnow()})
-    # Only bust the list cache — the full document cache stays warm during a reading session.
+
+    if data.current_page > old_page:
+        new_pages = await NasomaDocumentPage.find(
+            NasomaDocumentPage.doc_id == oid,
+            NasomaDocumentPage.page_number > (old_page + 1),
+            NasomaDocumentPage.page_number <= (data.current_page + 1),
+        ).to_list()
+        words_gained = sum(len(p.text.split()) for p in new_pages)
+        if words_gained > 0:
+            await current_user.inc({User.words_read: words_gained})
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            await ReadingActivity.get_motor_collection().update_one(
+                {"user_id": current_user.id, "date": today},
+                {"$inc": {"words_read": words_gained}},
+                upsert=True,
+            )
+
     await cache_del(f"cache:docs:user:{str(current_user.id)}")
-    logger.debug("Progress saved: doc=%s page=%d user=%s", doc_id, data.current_page, current_user.id)
     return {"success": True, "current_page": data.current_page}
 
 
