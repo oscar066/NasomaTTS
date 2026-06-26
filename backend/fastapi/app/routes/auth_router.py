@@ -1,17 +1,17 @@
-import hashlib
-import secrets
+from datetime import datetime, timedelta, timezone
 
-import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi_users import exceptions
-from fastapi_users.password import PasswordHelper
-from pydantic import BaseModel
-
-from ..auth.setup import auth_backend, fastapi_users, get_jwt_strategy, get_user_manager
+from fastapi import APIRouter, Depends, Request
+from ..schemas.auth import GoogleAuthBody
+from ..auth.setup import auth_backend, fastapi_users, get_user_manager
+from ..models.reading_activity import ReadingActivity
 from ..models.user import User, UserCreate, UserRead, UserUpdate
 from ..auth.setup import UserManager
+from ..services.auth_service import google_sign_in
+from ..utils.deps import get_current_user
+from ..utils.logger import setup_logger
 from ..utils.rate_limit import limiter
 
+logger = setup_logger("nasoma.routes.auth")
 router = APIRouter()
 
 router.include_router(
@@ -41,8 +41,37 @@ router.include_router(
 )
 
 
-class GoogleAuthBody(BaseModel):
-    id_token: str
+@router.get("/users/me/reading-activity", tags=["users"])
+async def get_reading_activity(current_user: User = Depends(get_current_user)):
+    today = datetime.now(timezone.utc).date()
+    since = today - timedelta(days=29)
+
+    rows = await ReadingActivity.find(
+        ReadingActivity.user_id == current_user.id,
+        ReadingActivity.date >= since.isoformat(),
+    ).to_list()
+
+    by_date = {r.date: r.words_read for r in rows}
+
+    days = []
+    for i in range(30):
+        d = (since + timedelta(days=i)).isoformat()
+        days.append({"date": d, "words_read": by_date.get(d, 0)})
+
+    return {"days": days}
+
+
+@router.get("/users/me/stats", tags=["users"])
+async def get_my_stats(current_user: User = Depends(get_current_user)):
+    higher_count = await User.find(
+        User.words_read > current_user.words_read,
+        User.is_active == True,  # noqa: E712
+    ).count()
+    rank = (higher_count + 1) if current_user.words_read > 0 else None
+    return {
+        "words_read": current_user.words_read,
+        "rank": rank,
+    }
 
 
 @router.post("/auth/google", tags=["auth"])
@@ -52,42 +81,10 @@ async def google_auth(
     body: GoogleAuthBody,
     user_manager: UserManager = Depends(get_user_manager),
 ):
-    # Verify the Google id_token and get the user's profile
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            "https://oauth2.googleapis.com/tokeninfo",
-            params={"id_token": body.id_token},
-        )
-    if resp.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid Google token")
-
-    data     = resp.json()
-    email    = data.get("email")
-    name     = data.get("name") or (email.split("@")[0] if email else "User")
-    picture  = data.get("picture", "")
-
-    if not email:
-        raise HTTPException(status_code=400, detail="Could not retrieve email from Google")
-
-    # Find existing user or create a new one
     try:
-        user = await user_manager.get_by_email(email)
-    except exceptions.UserNotExists:
-        h      = hashlib.md5(email.lower().encode()).hexdigest()
-        avatar = picture or f"https://www.gravatar.com/avatar/{h}?s=200&r=pg&d=mm"
-        user   = User(
-            email           = email,
-            hashed_password = PasswordHelper().hash(secrets.token_urlsafe(32)),
-            username        = name,
-            avatar          = avatar,
-            is_active       = True,
-            is_verified     = True,
-        )
-        await user.insert()
-
-    if not user.is_active:
-        raise HTTPException(status_code=400, detail="Account is disabled")
-
-    # Issue our JWT for the user
-    token = await get_jwt_strategy().write_token(user)
+        _, token = await google_sign_in(body.id_token, user_manager)
+    except Exception as e:
+        logger.error("Google auth failed: %s", e)
+        raise
+    logger.info("Google auth: user signed in")
     return {"access_token": token, "token_type": "bearer"}

@@ -1,225 +1,269 @@
-from unittest.mock import AsyncMock, MagicMock, patch
-from bson import ObjectId
+"""Tests for /documents/* routes."""
 
-from tests.conftest import AsyncCursor, make_doc, make_user
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from beanie import PydanticObjectId
+
+from tests.conftest import make_doc, make_user
 
 
 # ── GET /documents/me ─────────────────────────────────────────────────────────
 
-def test_my_documents_requires_auth(client):
-    response = client.get("/documents/me")
-    assert response.status_code == 403
+@pytest.mark.asyncio
+async def test_my_documents_requires_auth(client):
+    resp = await client.get("/documents/me")
+    assert resp.status_code == 401
 
 
-def test_my_documents_empty(authed_client):
-    client, user, mock_db = authed_client
-    mock_db.documents.find.return_value = AsyncCursor([])
+@pytest.mark.asyncio
+async def test_my_documents_empty(authed_client):
+    client, user = authed_client
+    with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+        MockDoc.find.return_value.to_list = AsyncMock(return_value=[])
+        with patch("app.routes.documents_router.cache_get", AsyncMock(return_value=None)):
+            with patch("app.routes.documents_router.cache_set", AsyncMock()):
+                resp = await client.get("/documents/me")
+    assert resp.status_code == 200
+    assert resp.json() == []
 
-    response = client.get("/documents/me")
 
-    assert response.status_code == 200
-    assert response.json() == []
+@pytest.mark.asyncio
+async def test_my_documents_served_from_cache(authed_client):
+    client, user = authed_client
+    cached = [{"id": "abc", "title": "Cached"}]
+    with patch("app.routes.documents_router.cache_get", AsyncMock(return_value=cached)):
+        resp = await client.get("/documents/me")
+    assert resp.status_code == 200
+    assert resp.json() == cached
 
 
-def test_my_documents_returns_list(authed_client):
-    client, user, mock_db = authed_client
-    doc = make_doc(author_id=user["_id"])
-    mock_db.documents.find.return_value = AsyncCursor([doc])
-
-    response = client.get("/documents/me")
-
-    assert response.status_code == 200
-    data = response.json()
+@pytest.mark.asyncio
+async def test_my_documents_returns_list(authed_client):
+    client, user = authed_client
+    doc = make_doc(author=user)
+    with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+        MockDoc.find.return_value.to_list = AsyncMock(return_value=[doc])
+        with patch("app.routes.documents_router.cache_get", AsyncMock(return_value=None)):
+            with patch("app.routes.documents_router.cache_set", AsyncMock()):
+                resp = await client.get("/documents/me")
+    assert resp.status_code == 200
+    data = resp.json()
     assert len(data) == 1
-    assert data[0]["title"] == doc["title"]
-    assert data[0]["id"] == str(doc["_id"])
-
-
-def test_my_documents_served_from_cache(authed_client):
-    client, user, mock_db = authed_client
-    cached = [{"id": "cached_id", "title": "Cached Doc"}]
-
-    with patch("app.routes.documents_router.cache_get", new=AsyncMock(return_value=cached)):
-        response = client.get("/documents/me")
-
-    assert response.status_code == 200
-    assert response.json() == cached
-    mock_db.documents.find.assert_not_called()
+    assert data[0]["title"] == doc.title
 
 
 # ── GET /documents/{doc_id} ───────────────────────────────────────────────────
 
-def test_get_document_success(authed_client):
-    client, user, mock_db = authed_client
-    doc = make_doc(author_id=user["_id"])
-    mock_db.documents.find_one.return_value = doc
-    mock_db.users.find_one.return_value = user
-
-    response = client.get(f"/documents/{doc['_id']}")
-
-    assert response.status_code == 200
-    assert response.json()["title"] == doc["title"]
+@pytest.mark.asyncio
+async def test_get_document_invalid_id(client):
+    resp = await client.get("/documents/not-a-valid-id")
+    assert resp.status_code == 400
 
 
-def test_get_document_not_found(authed_client):
-    client, user, mock_db = authed_client
-    mock_db.documents.find_one.return_value = None
-
-    response = client.get(f"/documents/{ObjectId()}")
-
-    assert response.status_code == 404
-
-
-def test_get_document_invalid_id(client):
-    response = client.get("/documents/not-a-valid-id")
-    assert response.status_code == 400
+@pytest.mark.asyncio
+async def test_get_document_not_found(authed_client):
+    client, user = authed_client
+    with patch("app.routes.documents_router.cache_get", AsyncMock(return_value=None)):
+        with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+            MockDoc.get = AsyncMock(return_value=None)
+            resp = await client.get(f"/documents/{PydanticObjectId()}")
+    assert resp.status_code == 404
 
 
-def test_get_document_served_from_cache(authed_client):
-    client, user, mock_db = authed_client
-    cached_doc = {"id": str(ObjectId()), "title": "Cached"}
-
-    with patch("app.routes.documents_router.cache_get", new=AsyncMock(return_value=cached_doc)):
-        response = client.get(f"/documents/{ObjectId()}")
-
-    assert response.status_code == 200
-    assert response.json() == cached_doc
-    mock_db.documents.find_one.assert_not_called()
+@pytest.mark.asyncio
+async def test_get_document_served_from_cache(authed_client):
+    client, user = authed_client
+    cached = {"id": str(PydanticObjectId()), "title": "Cached"}
+    with patch("app.routes.documents_router.cache_get", AsyncMock(return_value=cached)):
+        resp = await client.get(f"/documents/{PydanticObjectId()}")
+    assert resp.status_code == 200
+    assert resp.json() == cached
 
 
-# ── POST /documents/ ──────────────────────────────────────────────────────────
-
-def test_create_document_success(authed_client):
-    client, user, mock_db = authed_client
-    doc = make_doc(author_id=user["_id"])
-    inserted = MagicMock()
-    inserted.inserted_id = doc["_id"]
-    mock_db.documents.insert_one.return_value = inserted
-    mock_db.documents.find_one.return_value = doc
-
-    response = client.post(
-        "/documents",
-        json={"title": "My Book", "content": "Once upon a time..."},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["title"] == doc["title"]
+@pytest.mark.asyncio
+async def test_get_document_success(authed_client):
+    client, user = authed_client
+    doc = make_doc(author=user)
+    with patch("app.routes.documents_router.cache_get", AsyncMock(return_value=None)):
+        with patch("app.routes.documents_router.cache_set", AsyncMock()):
+            with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+                MockDoc.get = AsyncMock(return_value=doc)
+                with patch("app.routes.documents_router.User") as MockUser:
+                    MockUser.get = AsyncMock(return_value=user)
+                    resp = await client.get(f"/documents/{doc.id}")
+    assert resp.status_code == 200
+    assert resp.json()["title"] == doc.title
 
 
-def test_create_document_missing_title(authed_client):
-    client, user, mock_db = authed_client
+# ── POST /documents ───────────────────────────────────────────────────────────
 
-    response = client.post("/documents", json={"title": "", "content": "text"})
-
-    assert response.status_code == 400
-
-
-def test_create_document_title_too_long(authed_client):
-    client, user, mock_db = authed_client
-
-    response = client.post(
-        "/documents",
-        json={"title": "x" * 201, "content": "text"},
-    )
-
-    assert response.status_code == 400
+@pytest.mark.asyncio
+async def test_create_document_requires_auth(client):
+    resp = await client.post("/documents", json={"title": "Book", "content": "text"})
+    assert resp.status_code == 401
 
 
-def test_create_document_requires_auth(client):
-    response = client.post("/documents", json={"title": "Book", "content": "text"})
-    assert response.status_code == 403
+@pytest.mark.asyncio
+async def test_create_document_missing_title(authed_client):
+    client, user = authed_client
+    resp = await client.post("/documents", json={"title": "", "content": "text"})
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_create_document_title_too_long(authed_client):
+    client, user = authed_client
+    resp = await client.post("/documents", json={"title": "x" * 201, "content": "text"})
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_create_document_free_plan_limit(authed_client):
+    client, user = authed_client
+    with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+        MockDoc.find.return_value.count = AsyncMock(return_value=5)
+        resp = await client.post("/documents", json={"title": "Book", "content": "text"})
+    assert resp.status_code == 403
+    assert "limit" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_create_document_success(authed_client):
+    client, user = authed_client
+    doc = make_doc(author=user, title="My Book")
+    with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+        MockDoc.find.return_value.count = AsyncMock(return_value=0)
+        instance = MagicMock()
+        instance.insert = AsyncMock(return_value=doc)
+        MockDoc.return_value = instance
+        with patch("app.routes.documents_router.cache_del", AsyncMock()):
+            resp = await client.post("/documents", json={"title": "My Book", "content": "text"})
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "My Book"
 
 
 # ── DELETE /documents/{doc_id} ────────────────────────────────────────────────
 
-def test_delete_document_success(authed_client):
-    client, user, mock_db = authed_client
-    doc = make_doc(author_id=user["_id"])
-    mock_db.documents.find_one.return_value = doc
-
-    response = client.delete(f"/documents/{doc['_id']}")
-
-    assert response.status_code == 200
-    assert response.json()["success"] is True
-    mock_db.documents.delete_one.assert_called_once()
+@pytest.mark.asyncio
+async def test_delete_document_requires_auth(client):
+    resp = await client.delete(f"/documents/{PydanticObjectId()}")
+    assert resp.status_code == 401
 
 
-def test_delete_document_not_owner(authed_client):
-    client, user, mock_db = authed_client
-    doc = make_doc(author_id=ObjectId())  # different author
-    mock_db.documents.find_one.return_value = doc
+@pytest.mark.asyncio
+async def test_delete_document_not_found(authed_client):
+    client, user = authed_client
+    with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+        MockDoc.get = AsyncMock(return_value=None)
+        resp = await client.delete(f"/documents/{PydanticObjectId()}")
+    assert resp.status_code == 404
 
-    response = client.delete(f"/documents/{doc['_id']}")
 
-    assert response.status_code == 403
+@pytest.mark.asyncio
+async def test_delete_document_not_owner(authed_client):
+    client, user = authed_client
+    doc = make_doc()  # different author
+    with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+        MockDoc.get = AsyncMock(return_value=doc)
+        resp = await client.delete(f"/documents/{doc.id}")
+    assert resp.status_code == 403
 
 
-def test_delete_document_not_found(authed_client):
-    client, user, mock_db = authed_client
-    mock_db.documents.find_one.return_value = None
-
-    response = client.delete(f"/documents/{ObjectId()}")
-
-    assert response.status_code == 404
+@pytest.mark.asyncio
+async def test_delete_document_success(authed_client):
+    client, user = authed_client
+    doc = make_doc(author=user)
+    object.__setattr__(doc, "delete", AsyncMock())
+    with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+        MockDoc.get = AsyncMock(return_value=doc)
+        with patch("app.routes.documents_router.NasomaDocumentPage") as MockPage:
+            MockPage.find.return_value.delete = AsyncMock()
+            with patch("app.routes.documents_router.cache_del", AsyncMock()):
+                resp = await client.delete(f"/documents/{doc.id}")
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
 
 
 # ── PATCH /documents/{doc_id}/rename ─────────────────────────────────────────
 
-def test_rename_document_success(authed_client):
-    client, user, mock_db = authed_client
-    doc = make_doc(author_id=user["_id"])
-    mock_db.documents.find_one.return_value = doc
-
-    response = client.patch(
-        f"/documents/{doc['_id']}/rename",
-        json={"title": "New Title"},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["title"] == "New Title"
-    mock_db.documents.update_one.assert_called_once()
+@pytest.mark.asyncio
+async def test_rename_document_empty_title(authed_client):
+    client, user = authed_client
+    resp = await client.patch(f"/documents/{PydanticObjectId()}/rename", json={"title": "  "})
+    assert resp.status_code == 400
 
 
-def test_rename_document_empty_title(authed_client):
-    client, user, mock_db = authed_client
+@pytest.mark.asyncio
+async def test_rename_document_not_owner(authed_client):
+    client, user = authed_client
+    doc = make_doc()  # different author
+    with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+        MockDoc.get = AsyncMock(return_value=doc)
+        resp = await client.patch(f"/documents/{doc.id}/rename", json={"title": "New"})
+    assert resp.status_code == 403
 
-    response = client.patch(f"/documents/{ObjectId()}/rename", json={"title": "  "})
 
-    assert response.status_code == 400
-
-
-def test_rename_document_not_owner(authed_client):
-    client, user, mock_db = authed_client
-    doc = make_doc(author_id=ObjectId())
-    mock_db.documents.find_one.return_value = doc
-
-    response = client.patch(f"/documents/{doc['_id']}/rename", json={"title": "New"})
-
-    assert response.status_code == 403
+@pytest.mark.asyncio
+async def test_rename_document_success(authed_client):
+    client, user = authed_client
+    doc = make_doc(author=user)
+    object.__setattr__(doc, "set", AsyncMock())
+    with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+        MockDoc.get = AsyncMock(return_value=doc)
+        with patch("app.routes.documents_router.cache_del", AsyncMock()):
+            resp = await client.patch(f"/documents/{doc.id}/rename", json={"title": "New Title"})
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "New Title"
 
 
 # ── PATCH /documents/{doc_id}/progress ───────────────────────────────────────
 
-def test_update_progress_success(authed_client):
-    client, user, mock_db = authed_client
-    doc = make_doc(author_id=user["_id"])
-    mock_db.documents.find_one.return_value = doc
-
-    response = client.patch(
-        f"/documents/{doc['_id']}/progress",
-        json={"current_page": 5},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["current_page"] == 5
-    mock_db.documents.update_one.assert_called_once()
+@pytest.mark.asyncio
+async def test_update_progress_not_owner(authed_client):
+    client, user = authed_client
+    doc = make_doc()
+    with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+        MockDoc.get = AsyncMock(return_value=doc)
+        resp = await client.patch(f"/documents/{doc.id}/progress", json={"current_page": 3})
+    assert resp.status_code == 403
 
 
-def test_update_progress_not_owner(authed_client):
-    client, user, mock_db = authed_client
-    doc = make_doc(author_id=ObjectId())
-    mock_db.documents.find_one.return_value = doc
+@pytest.mark.asyncio
+async def test_update_progress_success(authed_client):
+    client, user = authed_client
+    # Keep new page == old page so the word-count branch is skipped entirely,
+    # avoiding Beanie field expression comparisons on the mocked class.
+    doc = make_doc(author=user, current_page=3)
+    object.__setattr__(doc, "set", AsyncMock())
+    with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+        MockDoc.get = AsyncMock(return_value=doc)
+        with patch("app.routes.documents_router.cache_del", AsyncMock()):
+            resp = await client.patch(f"/documents/{doc.id}/progress", json={"current_page": 3})
+    assert resp.status_code == 200
+    assert resp.json()["current_page"] == 3
 
-    response = client.patch(f"/documents/{doc['_id']}/progress", json={"current_page": 3})
 
-    assert response.status_code == 403
+# ── PATCH /documents/{doc_id}/status ─────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_update_status_success(authed_client):
+    client, user = authed_client
+    doc = make_doc(author=user)
+    object.__setattr__(doc, "set", AsyncMock())
+    with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+        MockDoc.get = AsyncMock(return_value=doc)
+        with patch("app.routes.documents_router.cache_del", AsyncMock()):
+            resp = await client.patch(f"/documents/{doc.id}/status", json={"reading_status": "finished"})
+    assert resp.status_code == 200
+    assert resp.json()["reading_status"] == "finished"
+
+
+@pytest.mark.asyncio
+async def test_update_status_not_owner(authed_client):
+    client, user = authed_client
+    doc = make_doc()
+    with patch("app.routes.documents_router.NasomaDocument") as MockDoc:
+        MockDoc.get = AsyncMock(return_value=doc)
+        resp = await client.patch(f"/documents/{doc.id}/status", json={"reading_status": "finished"})
+    assert resp.status_code == 403

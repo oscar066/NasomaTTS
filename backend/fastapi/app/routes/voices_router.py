@@ -12,7 +12,7 @@ GET /voices/    — Return available voices and TTS availability flag.
 
 from fastapi import APIRouter
 
-from ..services.tts import tts_service
+from ..services.tts_service import tts_service
 
 router = APIRouter(prefix="/voices", tags=["voices"])
 

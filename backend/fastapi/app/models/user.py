@@ -11,6 +11,7 @@ class User(BeanieBaseUser, Document):
     username: str
     avatar: str = ""
     plan: str = "free"
+    words_read: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
     pref_voice: Optional[str] = None
     pref_speed: Optional[float] = None

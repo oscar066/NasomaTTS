@@ -1,124 +1,153 @@
+"""Shared fixtures for the NasomaTTS test suite.
+
+Strategy:
+- Beanie is initialized once per session with mongomock_motor so model
+  class-level field expressions (User.words_read, etc.) work without a real DB.
+- httpx.AsyncClient + ASGITransport for async HTTP tests (no real server).
+- Beanie model methods are patched per-test with AsyncMock.
+- get_current_user is overridden via dependency_overrides for auth tests.
+- Lifespan hooks (connect_db, connect_cache, tts_service.load) are patched
+  so no real connections are attempted on startup.
 """
-Shared fixtures and helpers for the NasomaTTS test suite.
 
-Strategy
---------
-- FastAPI's TestClient (sync) is used for all HTTP-level tests.
-- MongoDB and Redis are never touched — the DB is replaced via FastAPI's
-  dependency_overrides, and the cache is kept at None (its default) so all
-  cache helpers are silent no-ops.
-- The lifespan hooks (connect_db, connect_cache, tts_service.load) are patched
-  before the TestClient starts so no real connections are attempted.
-"""
+from datetime import datetime
+from unittest.mock import AsyncMock, patch
 
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
-
+import beanie
+import mongomock_motor
 import pytest
-from bson import ObjectId
-from fastapi.testclient import TestClient
-from jose import jwt
+import pytest_asyncio
+from beanie import PydanticObjectId
+from httpx import ASGITransport, AsyncClient
 
-from app.db.database import get_db
 from app.main import app
-from app.utils.config import settings
+from app.models.document import NasomaDocument
+from app.models.document_page import NasomaDocumentPage
+from app.models.reading_activity import ReadingActivity
+from app.models.user import User
 from app.utils.deps import get_current_user
 
 
-# ── Data factories ────────────────────────────────────────────────────────────
+# ── Session-scoped Beanie init ────────────────────────────────────────────────
 
-def make_token(user_id: str) -> str:
-    exp = datetime.utcnow() + timedelta(hours=1)
-    return jwt.encode(
-        {"id": user_id, "exp": exp},
-        settings.jwt_secret,
-        algorithm=settings.jwt_algorithm,
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def init_beanie():
+    """Initialize Beanie once with an in-memory mongomock database.
+
+    This makes model class-level field expressions (e.g. User.words_read > 0)
+    work in tests without a real MongoDB connection.
+    """
+    client = mongomock_motor.AsyncMongoMockClient()
+    await beanie.init_beanie(
+        database=client["nasoma_test"],
+        document_models=[User, NasomaDocument, NasomaDocumentPage, ReadingActivity],
     )
 
 
-def make_user(user_id: ObjectId | None = None) -> dict:
-    uid = user_id or ObjectId()
-    return {
-        "_id": uid,
-        "username": "testuser",
-        "email": "test@example.com",
-        "password": "hashed_pw",
-        "avatar": "https://gravatar.com/avatar/test",
-        "createdAt": datetime(2024, 1, 1),
-        "updatedAt": datetime(2024, 1, 1),
-    }
+# ── Factories ─────────────────────────────────────────────────────────────────
+
+def make_user(**kwargs) -> User:
+    uid = PydanticObjectId()
+    return User.model_construct(
+        id=uid,
+        email=kwargs.get("email", "test@example.com"),
+        username=kwargs.get("username", "testuser"),
+        hashed_password="hashed",
+        avatar="https://gravatar.com/avatar/test",
+        plan=kwargs.get("plan", "free"),
+        words_read=kwargs.get("words_read", 0),
+        is_active=kwargs.get("is_active", True),
+        is_verified=kwargs.get("is_verified", True),
+        is_superuser=kwargs.get("is_superuser", False),
+        created_at=datetime(2024, 1, 1),
+    )
 
 
-def make_doc(doc_id: ObjectId | None = None, author_id: ObjectId | None = None) -> dict:
-    did = doc_id or ObjectId()
-    aid = author_id or ObjectId()
-    return {
-        "_id": did,
-        "title": "Test Document",
-        "content": "Some test content here.",
-        "pdf_url": None,
-        "thumbnail_url": None,
-        "pages": None,
-        "current_page": 0,
-        "author": aid,
-        "createdAt": datetime(2024, 1, 1),
-        "updatedAt": datetime(2024, 1, 1),
-    }
+def make_doc(author: User | None = None, **kwargs) -> NasomaDocument:
+    author_id = author.id if author else PydanticObjectId()
+    return NasomaDocument.model_construct(
+        id=PydanticObjectId(),
+        title=kwargs.get("title", "Test Document"),
+        content=kwargs.get("content", "Some test content."),
+        pdf_url=kwargs.get("pdf_url", None),
+        thumbnail_url=kwargs.get("thumbnail_url", None),
+        page_count=kwargs.get("page_count", None),
+        total_word_count=kwargs.get("total_word_count", None),
+        current_page=kwargs.get("current_page", 0),
+        reading_status=kwargs.get("reading_status", None),
+        author=author_id,
+        gutenberg_id=kwargs.get("gutenberg_id", None),
+        created_at=datetime(2024, 1, 1),
+        updated_at=datetime(2024, 1, 1),
+    )
 
 
-class AsyncCursor:
-    """Simulates Motor's async cursor so 'async for' loops work in mocks."""
+# ── Lifespan patches ──────────────────────────────────────────────────────────
 
-    def __init__(self, items: list):
-        self._it = iter(items)
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        try:
-            return next(self._it)
-        except StopIteration:
-            raise StopAsyncIteration
+LIFESPAN_PATCHES = [
+    patch("app.main.connect_db",       new_callable=AsyncMock),
+    patch("app.main.close_db",         new_callable=AsyncMock),
+    patch("app.main.connect_cache",    new_callable=AsyncMock),
+    patch("app.main.close_cache",      new_callable=AsyncMock),
+    patch("app.main.run_migrations",   new_callable=AsyncMock),
+    patch("app.main.tts_service.load", new_callable=AsyncMock),
+    patch("app.main.create_pool",      new_callable=AsyncMock),
+    patch("app.workers.pool.set_pool"),
+]
 
 
-# ── Fixtures ──────────────────────────────────────────────────────────────────
+# ── HTTP client fixtures ──────────────────────────────────────────────────────
 
-@pytest.fixture
-def mock_db():
-    db = MagicMock()
-    db.users.find.return_value = AsyncCursor([])
-    db.documents.find.return_value = AsyncCursor([])
-    db.users.find_one = AsyncMock(return_value=None)
-    db.documents.find_one = AsyncMock(return_value=None)
-    db.users.insert_one = AsyncMock()
-    db.documents.insert_one = AsyncMock()
-    db.documents.delete_one = AsyncMock()
-    db.documents.update_one = AsyncMock()
-    return db
-
-
-@pytest.fixture
-def client(mock_db):
-    """TestClient with all external connections patched out."""
-    app.dependency_overrides[get_db] = lambda: mock_db
-
-    with (
-        patch("app.main.connect_db", new_callable=AsyncMock),
-        patch("app.main.close_db", new_callable=AsyncMock),
-        patch("app.main.connect_cache", new_callable=AsyncMock),
-        patch("app.main.close_cache", new_callable=AsyncMock),
-        patch("app.services.tts.tts_service.load", new_callable=AsyncMock),
-    ):
-        with TestClient(app) as c:
+@pytest_asyncio.fixture
+async def client():
+    """Unauthenticated async client with all I/O patched out."""
+    with _apply_patches(LIFESPAN_PATCHES):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             yield c
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def authed_client():
+    """Async client with get_current_user returning a free-plan user."""
+    user = make_user()
+    app.dependency_overrides[get_current_user] = lambda: user
+
+    with _apply_patches(LIFESPAN_PATCHES):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            yield c, user
 
     app.dependency_overrides.clear()
 
 
-@pytest.fixture
-def authed_client(client, mock_db):
-    """client with get_current_user returning a fixed test user."""
-    user = make_user()
+@pytest_asyncio.fixture
+async def pro_client():
+    """Async client with a pro-plan user."""
+    user = make_user(plan="pro")
     app.dependency_overrides[get_current_user] = lambda: user
-    yield client, user, mock_db
+
+    with _apply_patches(LIFESPAN_PATCHES):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            yield c, user
+
+    app.dependency_overrides.clear()
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+class _MultiPatchCtx:
+    def __init__(self, patches):
+        self._patches = patches
+
+    def __enter__(self):
+        for p in self._patches:
+            p.start()
+        return self
+
+    def __exit__(self, *_):
+        for p in self._patches:
+            p.stop()
+
+
+def _apply_patches(patches):
+    return _MultiPatchCtx(patches)

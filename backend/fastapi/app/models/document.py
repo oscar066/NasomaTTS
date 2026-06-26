@@ -15,6 +15,7 @@ class NasomaDocument(Document):
     current_page: int = 0
     reading_status: Optional[str] = None
     author: PydanticObjectId
+    gutenberg_id: Optional[int] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

@@ -105,6 +105,12 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
   const playPageRef      = useRef<((idx: number) => void) | null>(null);
   const playParagraphRef = useRef<((pageIdx: number, paraIdx: number) => void) | null>(null);
 
+  // rAF-based SSE throttle — holds the latest pending highlight patch and the
+  // scheduled frame ID.  Only the most-recent event in each frame is applied,
+  // so a slow machine never accumulates a backlog of stale word positions.
+  const pendingHighlightRef = useRef<Partial<PlaybackState> | null>(null);
+  const rafIdRef            = useRef<number | null>(null);
+
   // Client-side audio queue: `${pageIdx}:${paraIdx}` → blob URL
   const audioQueueRef = useRef<Map<string, string>>(new Map());
   // Keys currently being fetched (prevents duplicate in-flight requests)
@@ -127,6 +133,20 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
 
   const update = (patch: Partial<PlaybackState>) =>
     setState((prev) => ({ ...prev, ...patch }));
+
+  // Coalesce rapid SSE highlight events into one React state update per frame.
+  const scheduleHighlight = (patch: Partial<PlaybackState>) => {
+    pendingHighlightRef.current = { ...(pendingHighlightRef.current ?? {}), ...patch };
+    if (rafIdRef.current === null) {
+      rafIdRef.current = requestAnimationFrame(() => {
+        rafIdRef.current = null;
+        if (pendingHighlightRef.current) {
+          update(pendingHighlightRef.current);
+          pendingHighlightRef.current = null;
+        }
+      });
+    }
+  };
 
   // ── Progress persistence
 
@@ -204,7 +224,7 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
                 return true;
               }
               if (data.newParagraph) {
-                update({
+                scheduleHighlight({
                   currentParagraphIndex: paragraphOffset + data.paragraphIndex,
                   currentWordIndex: -1,
                   absoluteWordIdx: data.absoluteWordIndex ?? -1,
@@ -213,7 +233,7 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
                 });
               }
               if (data.wordWindow != null) {
-                update({
+                scheduleHighlight({
                   wordWindow: data.wordWindow,
                   windowStart: data.windowStart,
                   currentWordIndex: data.currentWordIndex,
@@ -569,6 +589,11 @@ export const useTTSPlayback = (deps: TTSPlaybackDeps): TTSPlaybackResult => {
 
     abortRef.current?.abort();
     abortRef.current = null;
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    pendingHighlightRef.current = null;
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }

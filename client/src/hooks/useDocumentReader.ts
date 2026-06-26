@@ -32,6 +32,7 @@ export interface ReaderState {
   /** Per-page text extracted server-side at upload (PyMuPDF). Primary TTS source for PDFs. */
   storedPages: StoredPage[];
   paragraphs: string[];
+  paragraphTypes: ("heading" | "body")[];
   currentParagraphIndex: number;
   currentWordIndex: number;
 
@@ -102,9 +103,10 @@ export const useDocumentReader = () => {
     docName:        doc.docName,
     text:           doc.text,
     pdfUrl:         doc.pdfUrl,
-    storedPages:    doc.storedPages,
-    paragraphs:     doc.paragraphs,
-    totalWordCount: doc.totalWordCount,
+    storedPages:     doc.storedPages,
+    paragraphs:      doc.paragraphs,
+    paragraphTypes:  doc.paragraphTypes,
+    totalWordCount:  doc.totalWordCount,
     loading:        doc.loading,
     // Merge errors: document load errors take precedence; TTS errors shown after
     error:      doc.error || playback.state.error,

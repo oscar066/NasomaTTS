@@ -1,17 +1,20 @@
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
+
+import pytest
 
 
-def test_health_ok(client):
-    response = client.get("/health")
-    assert response.status_code == 200
-    data = response.json()
+@pytest.mark.asyncio
+async def test_health_ok(client):
+    resp = await client.get("/health")
+    assert resp.status_code == 200
+    data = resp.json()
     assert data["status"] == "ok"
     assert "tts_available" in data
 
 
-def test_health_tts_unavailable(client):
-    with patch("app.routes.voices_router.tts_service.available", False):
-        response = client.get("/health")
-    assert response.status_code == 200
-    # tts_available reflects the real service state; either value is valid
-    assert isinstance(response.json()["tts_available"], bool)
+@pytest.mark.asyncio
+async def test_health_tts_unavailable(client):
+    with patch("app.services.tts_service.KokoroService.available", new_callable=PropertyMock, return_value=False):
+        resp = await client.get("/health")
+    assert resp.status_code == 200
+    assert resp.json()["tts_available"] is False

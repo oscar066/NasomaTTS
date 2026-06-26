@@ -38,6 +38,8 @@ export interface DocumentLoadResult {
   pdfUrl: string | null;
   storedPages: StoredPage[];
   paragraphs: string[];
+  /** Parallel to `paragraphs` — "heading" | "body" for text-only classics. */
+  paragraphTypes: ("heading" | "body")[];
   totalWordCount: number | null;
   loading: boolean;
   error: string;
@@ -59,6 +61,7 @@ export const useDocumentLoad = (): DocumentLoadResult => {
     pdfUrl: null,
     storedPages: [],
     paragraphs: [],
+    paragraphTypes: [],
     totalWordCount: null,
     loading: true,
     error: "",
@@ -79,7 +82,7 @@ export const useDocumentLoad = (): DocumentLoadResult => {
       try {
         const localPage = loadLocalProgress(documentId);
 
-        // ── Fast path: Zustand document-cache store ───────────────────────
+        // Fast path: Zustand document-cache store
         const cached = cacheGet(documentId);
         // Cache is valid when: entry exists, pdf_url isn't explicitly null
         // (null = failed upload → force re-fetch), and for PDF docs the pages
@@ -90,19 +93,39 @@ export const useDocumentLoad = (): DocumentLoadResult => {
           (!cached.pdf_url || (Array.isArray(cached.pages) && cached.pages.length > 0));
 
         if (cacheValid) {
+          const cachedPages = (cached.pages as StoredPage[]) ?? [];
+          const isTextOnly = !cached.pdf_url;
+          const cachedParagraphs =
+            isTextOnly && cachedPages.length > 0
+              ? cachedPages.flatMap((p) =>
+                  p.paragraphs?.length
+                    ? p.paragraphs.map((para: { text: string }) => para.text)
+                    : p.text.split(/\n\s*\n/).filter(Boolean)
+                )
+              : cached.content.split(/\n\s*\n/).filter(Boolean);
+          const cachedTypes: ("heading" | "body")[] =
+            isTextOnly && cachedPages.length > 0
+              ? cachedPages.flatMap((p) =>
+                  p.paragraphs?.length
+                    ? p.paragraphs.map((para) => (para.type === "heading" ? "heading" : "body"))
+                    : p.text.split(/\n\s*\n/).filter(Boolean).map(() => "body" as const)
+                )
+              : [];
+
           update({
             docName: cached.title,
             text: cached.content,
             pdfUrl: cached.pdf_url ? pdfProxyUrl(documentId) : null,
-            storedPages: (cached.pages as StoredPage[]) ?? [],
-            paragraphs: cached.content.split(/\n\s*\n/).filter(Boolean),
+            storedPages: cachedPages,
+            paragraphs: cachedParagraphs,
+            paragraphTypes: cachedTypes,
             initialPage: localPage > 0 ? localPage : (cached.current_page ?? 0),
             loading: false,
           });
           return;
         }
 
-        // ── Slow path: REST API ───────────────────────────────────────────
+        // Slow path: REST API 
         // Fetch document metadata and page data in parallel — pages live in
         // a separate collection and endpoint but are needed immediately for
         // TTS highlighting, so we avoid sequential round-trips.
@@ -120,12 +143,33 @@ export const useDocumentLoad = (): DocumentLoadResult => {
           current_page: doc.current_page ?? 0,
         });
 
+        // For text-only docs (classics), build paragraphs from stored pages
+        // so the reader shows the full book, not just the 4 000-char content excerpt.
+        const isTextOnly = !doc.pdf_url;
+        const paragraphs =
+          isTextOnly && pages.length > 0
+            ? pages.flatMap((p) =>
+                p.paragraphs?.length
+                  ? p.paragraphs.map((para: { text: string }) => para.text)
+                  : p.text.split(/\n\s*\n/).filter(Boolean)
+              )
+            : doc.content.split(/\n\s*\n/).filter(Boolean);
+        const paragraphTypes: ("heading" | "body")[] =
+          isTextOnly && pages.length > 0
+            ? pages.flatMap((p) =>
+                p.paragraphs?.length
+                  ? p.paragraphs.map((para) => (para.type === "heading" ? "heading" : "body"))
+                  : p.text.split(/\n\s*\n/).filter(Boolean).map(() => "body" as const)
+              )
+            : [];
+
         update({
           docName: doc.title,
           text: doc.content,
           pdfUrl: doc.pdf_url ? pdfProxyUrl(documentId) : null,
           storedPages: pages,
-          paragraphs: doc.content.split(/\n\s*\n/).filter(Boolean),
+          paragraphs,
+          paragraphTypes,
           totalWordCount: doc.total_word_count ?? null,
           initialPage: localPage > 0 ? localPage : (doc.current_page ?? 0),
         });

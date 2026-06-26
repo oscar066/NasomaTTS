@@ -15,7 +15,7 @@ import httpx
 
 from ..utils.config import settings
 from ..utils.logger import setup_logger
-from .voices import VOICE_REGISTRY
+from .voices_service import VOICE_REGISTRY
 
 logger = setup_logger("nasoma.services.tts")
 
