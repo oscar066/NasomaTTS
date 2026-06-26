@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { TopBar } from "../TopBar";
 import { FileCard } from "./components/FileCard";
 import Sidebar from "../SideBar";
@@ -12,6 +12,7 @@ import { useDocumentUpload } from "@/hooks/useDocumentUpload";
 import { useDocumentsStore } from "@/store/documents";
 import { toast } from "sonner";
 import UpgradeModal from "@/components/ui/UpgradeModal";
+
 
 function SkeletonCard() {
   return (
@@ -73,7 +74,9 @@ export default function UserDashboard() {
   const [error, setError]       = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showUpgrade, setShowUpgrade] = useState(false);
-  const fileInputRef            = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver]   = useState(false);
+  const dragCounterRef                = useRef(0);
+  const fileInputRef                  = useRef<HTMLInputElement>(null);
   const { uploadDocument, isLoading: isUploading } = useDocumentUpload();
   const { documents, isLoaded, setDocuments, updateDocument, removeDocument } = useDocumentsStore();
 
@@ -135,11 +138,49 @@ export default function UserDashboard() {
     }
   };
 
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer.types.includes("Files")) setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current === 0) setIsDragOver(false);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      toast.error("Invalid file type", { description: "Please drop a PDF file." });
+      return;
+    }
+    try {
+      const result = await uploadDocument(file);
+      const shortName = file.name.length > 40 ? `${file.name.slice(0, 37)}…` : file.name;
+      toast.success("Document uploaded", { description: `"${shortName}" has been processed and saved.` });
+      if (result?.id) router.push(`/documents/${result.id}`);
+    } catch (err: unknown) {
+      const e2 = err as Error & { isPlanLimit?: boolean };
+      if (e2.isPlanLimit) setShowUpgrade(true);
+      else toast.error("Upload failed", { description: e2.message || "An error occurred during upload." });
+    }
+  }, [uploadDocument, router]);
+
   const firstName     = session?.user?.name?.split(" ")[0] ?? "there";
-  const isInitialLoad = loading && !isLoaded;
-  const userPlan      = session?.user?.plan ?? "free";
-  const isFree        = userPlan === "free";
-  const FREE_LIMIT    = 5;
+  const isInitialLoad    = loading && !isLoaded;
+  const userPlan         = session?.user?.plan ?? "free";
+  const isFree           = userPlan === "free";
+  const FREE_LIMIT       = 5;
   const filteredDocs  = searchQuery.trim()
     ? documents.filter((d) => d.title.toLowerCase().includes(searchQuery.toLowerCase()))
     : documents;
@@ -153,7 +194,13 @@ export default function UserDashboard() {
   }
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div
+      className="flex h-screen bg-background overflow-hidden"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       <Sidebar isOpen={sidebarOpen} />
 
       <UpgradeModal
@@ -162,6 +209,17 @@ export default function UserDashboard() {
         title="Document limit reached"
         description={`Free plan allows up to ${FREE_LIMIT} documents. Upgrade to Pro for unlimited uploads.`}
       />
+
+      {/* Drag-and-drop overlay */}
+      {isDragOver && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary rounded-none pointer-events-none">
+          <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+            <Upload className="h-10 w-10 text-primary" />
+          </div>
+          <p className="text-xl font-semibold">Drop your PDF here</p>
+          <p className="text-sm text-muted-foreground mt-1">Release to upload</p>
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar onToggleSidebar={() => setSidebarOpen((p) => !p)} onSearch={setSearchQuery} />

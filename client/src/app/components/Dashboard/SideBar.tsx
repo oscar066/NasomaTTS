@@ -12,6 +12,8 @@ import {
   Crown,
   ShieldCheck,
   Users,
+  Trophy,
+  BarChart3,
 } from "lucide-react";
 import NasomaLogo from "../Logo/nasoma-logo";
 import { useDocumentUpload } from "@/hooks/useDocumentUpload";
@@ -26,8 +28,10 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
-  { icon: FileText, label: "All Documents", href: "#" },
+  { icon: LayoutDashboard, label: "Library",        href: "/dashboard"    },
+  { icon: FileText,        label: "Classics",       href: "/classics"     },
+  // { icon: BarChart3,       label: "My Stats",      href: "/stats"        },
+  // { icon: Trophy,          label: "Leaderboard",   href: "/leaderboard"  },
 ];
 
 const bottomNavItems: NavItem[] = [
