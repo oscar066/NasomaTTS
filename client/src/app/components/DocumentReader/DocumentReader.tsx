@@ -49,6 +49,7 @@ const DocumentReader: React.FC = () => {
       pdfUrl,
       storedPages,
       paragraphs,
+      paragraphTypes,
       currentParagraphIndex,
       currentWordIndex,
       absoluteWordIdx,
@@ -207,6 +208,7 @@ const DocumentReader: React.FC = () => {
         ) : text ? (
           <TextReader
             paragraphs={paragraphs}
+            paragraphTypes={paragraphTypes}
             absoluteWordIdx={absoluteWordIdx}
             overlayHeight={OVERLAY_HEIGHT}
             onSkipTo={skipToParagraph}

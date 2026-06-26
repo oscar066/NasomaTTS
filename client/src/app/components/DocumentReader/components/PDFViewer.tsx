@@ -166,15 +166,22 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     bbox: [number, number, number, number];
   } | null>(null);
 
-  // ── Lazy rendering
-  // Rendering 100+ PDF canvases simultaneously blocks the main thread.
-  // We track which pages have been "activated" (entered the viewport or been
-  // targeted by TTS).  Once activated a page is never deactivated — so
-  // scrolling back is seamless.  The IntersectionObserver adds pages with a
-  // generous 600 px root margin so they load before the user reaches them.
-  const [renderedPages, setRenderedPages] = useState<Set<number>>(
-    () => new Set([0, 1, 2])
-  );
+  // ── Virtual window
+  // Only pages within RENDER_BUFFER of the current "centre" are mounted as
+  // real <Page> components; the rest show a correctly-sized skeleton so the
+  // scrollbar stays accurate.  Pages outside DESTROY_BUFFER are torn down so
+  // their canvas memory is freed.  Centre is updated by the IntersectionObserver
+  // (scroll) and by TTS page advances.
+  const RENDER_BUFFER  = 3;  // render pages centre ± 3
+  const DESTROY_BUFFER = 5;  // keep mounted up to centre ± 5
+
+  const [centrePageIdx, setCentrePageIdx] = useState(0);
+
+  const isPageMounted = (i: number) =>
+    Math.abs(i - centrePageIdx) <= DESTROY_BUFFER;
+
+  const isPageRendered = (i: number) =>
+    Math.abs(i - centrePageIdx) <= RENDER_BUFFER;
 
   const pageRefs       = useRef<(HTMLDivElement | null)[]>([]);
   const paraOverlayRef = useRef<HTMLDivElement | null>(null);
@@ -209,79 +216,63 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     numPagesRef.current          = 0;
     setNumPages(0);
     setIndexedCount(0);
-    setRenderedPages(new Set([0, 1, 2]));
+    setCentrePageIdx(0);
     setParaOverlay(null);
     setWordOverlay(null);
   }, [url]);
 
-  // ── IntersectionObserver — activate pages as they approach the viewport ──
+  // ── IntersectionObserver — shift centre as user scrolls ─────────────────
   //
-  // Runs whenever numPages changes (i.e. once the PDF loads).  Observes every
-  // page-wrapper div; when one enters within 600 px of the viewport we mark
-  // it and its immediate neighbours as rendered so the real <Page> element
-  // replaces the skeleton before the user sees it.
+  // Watches every page wrapper; when one intersects (with a 200 px root margin
+  // so we load slightly ahead) we update centrePageIdx.  The render/destroy
+  // windows derived from centrePageIdx do the rest.
 
   useEffect(() => {
     if (numPages === 0) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const newIds: number[] = [];
+        // Pick the intersecting page closest to the viewport centre.
+        let best: number | null = null;
+        let bestDist = Infinity;
         entries.forEach((entry) => {
           if (!entry.isIntersecting) return;
-          const idx = Number(
-            (entry.target as HTMLElement).dataset.nasomaPage
-          );
-          if (!isNaN(idx)) newIds.push(idx);
+          const idx = Number((entry.target as HTMLElement).dataset.nasomaPage);
+          if (isNaN(idx)) return;
+          const dist = Math.abs(entry.boundingClientRect.top + entry.boundingClientRect.height / 2
+            - window.innerHeight / 2);
+          if (dist < bestDist) { best = idx; bestDist = dist; }
         });
-        if (newIds.length === 0) return;
-
-        setRenderedPages((prev) => {
-          const next = new Set(prev);
-          newIds.forEach((idx) => {
-            // Activate the page plus one page on each side as a buffer.
-            for (
-              let i = Math.max(0, idx - 1);
-              i <= Math.min(numPages - 1, idx + 2);
-              i++
-            ) {
-              next.add(i);
-            }
-          });
-          return next;
-        });
+        if (best !== null) setCentrePageIdx(best);
       },
-      { rootMargin: "600px 0px", threshold: 0 }
+      { rootMargin: "200px 0px", threshold: 0 }
     );
 
-    pageRefs.current.forEach((el) => {
-      if (el) observer.observe(el);
-    });
-
+    pageRefs.current.forEach((el) => { if (el) observer.observe(el); });
     return () => observer.disconnect();
   }, [numPages]);
 
-  // ── Pre-activate the TTS target page
-  //
-  // When playback advances to a page the user hasn't scrolled to yet, we must
-  // ensure that page (and the next two) are rendered so highlighting works.
+  // ── Keep centre in sync with TTS page advances ────────────────────────────
 
   useEffect(() => {
-    const page = highlightPage;
-    if (page == null || page < 0) return;
-    setRenderedPages((prev) => {
-      if (prev.has(page) && prev.has(page + 1)) return prev; // already there
-      const next = new Set(prev);
-      for (
-        let i = Math.max(0, page - 1);
-        i <= Math.min(numPagesRef.current - 1, page + 2);
-        i++
-      ) {
-        next.add(i);
-      }
-      return next;
-    });
+    if (highlightPage != null && highlightPage >= 0) {
+      setCentrePageIdx(highlightPage);
+    }
   }, [highlightPage]);
+
+  // ── Clear wordEntriesRef for pages that fall outside the destroy window ───
+  // When a page is torn down its indexed entries become stale — clear them so
+  // re-mounting triggers a fresh indexPageWords run.
+
+  useEffect(() => {
+    if (numPages === 0) return;
+    for (let i = 0; i < numPages; i++) {
+      if (!isPageMounted(i) && wordEntriesRef.current[i]) {
+        wordEntriesRef.current[i] = [];
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centrePageIdx, numPages]);
 
   // ── Text layer indexing
 
@@ -591,7 +582,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         <div className="flex flex-col items-center gap-6">
           {numPages > 0 &&
             Array.from({ length: numPages }, (_, i) => {
-              const isActivated = renderedPages.has(i);
+              const mounted  = isPageMounted(i);
+              const rendered = isPageRendered(i);
               return (
                 <div
                   key={i + 1}
@@ -599,7 +591,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                   data-nasoma-page={i}
                   style={{ position: "relative" }}
                 >
-                  {isActivated ? (
+                  {mounted && rendered ? (
                     <Page
                       pageNumber={i + 1}
                       width={containerWidth || 800}
@@ -621,7 +613,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                       Soft background tint over the active paragraph.
                       Scaled from PDF user-space → canvas pixels.
                       pointer-events: none preserves text-layer interactivity. */}
-                  {isActivated && paraOverlay?.pageIdx === i && (() => {
+                  {rendered && paraOverlay?.pageIdx === i && (() => {
                     const pd = storedPages?.[i];
                     if (!pd?.width || !pd?.height) return null;
                     const [bx0, by0, bx1, by1] = paraOverlay.bbox;
@@ -653,7 +645,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                       Precise highlight on the word currently being spoken.
                       Sits above the paragraph tint (z-index 11). Only rendered
                       for documents with word_bboxes in their manifest. */}
-                  {isActivated && wordOverlay?.pageIdx === i && (() => {
+                  {rendered && wordOverlay?.pageIdx === i && (() => {
                     const pd = storedPages?.[i];
                     if (!pd?.width) return null;
                     const [wx0, wy0, wx1, wy1] = wordOverlay.bbox;
