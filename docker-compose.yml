@@ -43,6 +43,9 @@ services:
       - RESEND_API_KEY=${RESEND_API_KEY}
       - FRONTEND_URL=${FRONTEND_URL:-https://me-nasoma.com}
       - KOKORO_URL=${KOKORO_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX=${PINECONE_INDEX:-me-nasoma}
     ports:
       - "127.0.0.1:8001:8000"
     depends_on:
@@ -80,6 +83,10 @@ services:
       - REDIS_URL=redis://nasoma-redis:6379
       - RESEND_API_KEY=${RESEND_API_KEY}
       - FRONTEND_URL=${FRONTEND_URL:-https://me-nasoma.com}
+      - KOKORO_URL=${KOKORO_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX=${PINECONE_INDEX:-me-nasoma}
     depends_on:
       redis:
         condition: service_healthy

@@ -14,6 +14,7 @@ from ..services.document_service import fmt_author, fmt_doc
 from ..utils.cache import TTL_DOC_LIST, TTL_DOCUMENT, cache_del, cache_get, cache_set
 from ..utils.deps import get_current_user
 from ..utils.logger import setup_logger
+from ..workers import pool as worker_pool
 
 logger = setup_logger("nasoma.routes.documents")
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -142,6 +143,13 @@ async def create_document(data: DocumentCreate, current_user: User = Depends(get
 
     logger.info("Document created: id=%s title=%r user=%s", doc.id, doc.title, current_user.id)
     await cache_del(f"cache:docs:user:{str(current_user.id)}")
+
+    # Pro users get their document indexed immediately so AI chat is instant
+    if current_user.plan == "pro" and doc.content:
+        pool = worker_pool.get_pool()
+        if pool:
+            await pool.enqueue_job("index_single_document", document_id=str(doc.id))
+
     return fmt_doc(doc, fmt_author(current_user))
 
 
@@ -165,6 +173,14 @@ async def delete_document(doc_id: str, current_user: User = Depends(get_current_
         f"cache:pages:{doc_id}",
         f"cache:docs:user:{str(current_user.id)}",
     )
+
+    # Remove vectors from Pinecone — fire and forget, don't fail the delete if Pinecone is down
+    try:
+        from ..ai.services.initializers import delete_namespace
+        delete_namespace(doc_id)
+    except Exception as e:
+        logger.warning("Failed to delete Pinecone namespace for doc %s: %s", doc_id, e)
+
     logger.info("Document deleted: id=%s user=%s", doc_id, current_user.id)
     return {"success": True}
 

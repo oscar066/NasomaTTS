@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     mongodb_db: str = "nasoma"
 
     # ── JWT authentication
-    jwt_secret: str = "change-me"       # Must be overridden in production.
-    jwt_expire_hours: int = 720         # Token lifetime in hours (30 days, matches NextAuth session).
+    jwt_secret: str = "change-me"       
+    jwt_expire_hours: int = 720         
 
     # ── Redis cache
     redis_url: str = "redis://localhost:6379"
@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     minio_access_key: str = ""
     minio_secret_key: str = ""
     minio_bucket: str = "documents"     # Bucket where PDF binaries are stored.
+
+    # ── AI (OpenAI + Pinecone)
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
+    pinecone_api_key: str = ""
+    pinecone_index: str = "me-nasoma-vector-store"
 
 
 # Module-level singleton — import this everywhere instead of instantiating

@@ -1,4 +1,4 @@
-"""Background email tasks executed by the arq worker."""
+"""Background tasks executed by the arq worker."""
 
 import asyncio
 from datetime import datetime
@@ -154,3 +154,41 @@ def _reset_password_email(username: str, reset_url: str) -> str:
 </body>
 </html>
 """
+
+
+# AI indexing tasks
+async def index_single_document(ctx, *, document_id: str) -> None:
+    """Index one document into Pinecone. Enqueued on upload for Pro users."""
+    from beanie import PydanticObjectId
+    from ..models.document import NasomaDocument
+    from ..ai.services.rag import index_document
+    from ..utils.logger import setup_logger
+
+    logger = setup_logger("nasoma.worker.ai")
+    doc = await NasomaDocument.get(PydanticObjectId(document_id))
+    if not doc or not doc.content:
+        logger.warning("index_single_document: doc %s not found or has no content", document_id)
+        return
+    await index_document(document_id, doc.content)
+    logger.info("Indexed document %s", document_id)
+
+
+async def index_user_documents(ctx, *, user_id: str) -> None:
+    """Index all documents for a user. Enqueued when a user upgrades to Pro."""
+    from beanie import PydanticObjectId
+    from ..models.document import NasomaDocument
+    from ..ai.services.rag import index_document
+    from ..utils.logger import setup_logger
+
+    logger = setup_logger("nasoma.worker.ai")
+    docs = await NasomaDocument.find(
+        NasomaDocument.author == PydanticObjectId(user_id)
+    ).to_list()
+
+    indexed = 0
+    for doc in docs:
+        if doc.content:
+            await index_document(str(doc.id), doc.content)
+            indexed += 1
+
+    logger.info("Indexed %d/%d documents for user %s", indexed, len(docs), user_id)

@@ -14,6 +14,7 @@ class NasomaDocument(Document):
     total_word_count: Optional[int] = None
     current_page: int = 0
     reading_status: Optional[str] = None
+    summary: Optional[str] = None
     author: PydanticObjectId
     gutenberg_id: Optional[int] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

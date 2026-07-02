@@ -13,6 +13,8 @@ from .utils.config import settings
 from .utils.rate_limit import limiter
 from .db.database import close_db, connect_db, get_db
 from .migrations.runner import run_migrations
+from .ai.routes import chat, quiz, recap, summary as ai_summary
+from .ai.services.initializers import warm_up as ai_warm_up
 from .routes import admin_router, auth_router, classics_router, documents_router, leaderboard_router, pdf_router, speak_router, voices_router
 from .services.tts_service import tts_service
 from .utils.logger import setup_logger
@@ -28,6 +30,7 @@ async def lifespan(app: FastAPI):
     await run_migrations(get_db())
     await connect_cache(settings.redis_url)
     await tts_service.load()
+    await ai_warm_up()
     arq_pool = await create_pool(RedisSettings.from_dsn(settings.redis_url))
     worker_pool.set_pool(arq_pool)
     logger.info("Startup complete")
@@ -74,6 +77,12 @@ app.include_router(leaderboard_router.router)
 app.include_router(pdf_router.router)
 app.include_router(voices_router.router)
 app.include_router(speak_router.router)
+
+# AI routes — all under /ai prefix
+app.include_router(chat.router, prefix="/ai")
+app.include_router(ai_summary.router, prefix="/ai")
+app.include_router(quiz.router, prefix="/ai")
+app.include_router(recap.router, prefix="/ai")
 
 
 @app.get("/health", tags=["health"])
