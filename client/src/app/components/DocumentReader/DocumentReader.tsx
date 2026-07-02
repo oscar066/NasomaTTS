@@ -33,6 +33,28 @@ const PDFViewer = dynamic(() => import("./components/PDFViewer"), {
 const OVERLAY_HEIGHT = 180;
 const HEADER_HEIGHT  = 56;
 
+// Shared with the full-page loading skeleton below so swapping from
+// "metadata loading" to "PDF still rendering" doesn't change appearance.
+const DocumentContentSkeleton = () => (
+  <div className="flex-1 flex flex-col items-center px-6 pt-10 pb-48 gap-5 overflow-hidden">
+    <div className="w-24 h-3 rounded bg-muted animate-pulse" />
+    <div className="w-full max-w-2xl bg-card border border-border rounded-xl p-8 space-y-4 shadow-sm">
+      <div className="h-3 bg-muted rounded animate-pulse w-1/3 mb-6" />
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="space-y-2">
+          <div className="h-3 bg-muted rounded animate-pulse w-full" />
+          <div className="h-3 bg-muted rounded animate-pulse w-11/12" />
+          <div className="h-3 bg-muted rounded animate-pulse w-4/5" />
+        </div>
+      ))}
+      <div className="pt-4 space-y-2">
+        <div className="h-3 bg-muted rounded animate-pulse w-full" />
+        <div className="h-3 bg-muted rounded animate-pulse w-3/4" />
+      </div>
+    </div>
+  </div>
+);
+
 const DocumentReader: React.FC = () => {
   const router = useRouter();
   const { data: session } = useSession();
@@ -95,6 +117,20 @@ const DocumentReader: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTTSPage, pdfLoaded, isPlaying, scrollToTTSPage]);
 
+  // Some PDF pages render as blank canvases until the scroll container is
+  // nudged (a known react-pdf/pdf.js paint quirk). scrollToTTSPage() already
+  // fixes this whenever a real TTS page index is set, but on a fresh
+  // (non-resumed) document currentTTSPage stays -1 until the user presses
+  // Play, leaving the page blank in the meantime. Force a 1px scroll nudge
+  // as soon as the PDF mounts so this doesn't depend on Play being pressed.
+  useEffect(() => {
+    if (!pdfLoaded || !pdfScrollRef.current) return;
+    const el = pdfScrollRef.current;
+    el.scrollBy({ top: 1 });
+    const id = requestAnimationFrame(() => el.scrollBy({ top: -1 }));
+    return () => cancelAnimationFrame(id);
+  }, [pdfLoaded]);
+
   // Must be above any early return to keep hook call order stable
   const paragraphWordBoundaries = useMemo(() => {
     const page = storedPages[currentTTSPage >= 0 ? currentTTSPage : 0];
@@ -120,26 +156,7 @@ const DocumentReader: React.FC = () => {
         </div>
 
         {/* Fake content */}
-        <div className="flex-1 flex flex-col items-center px-6 pt-10 pb-48 gap-5 overflow-hidden">
-          {/* Page label */}
-          <div className="w-24 h-3 rounded bg-muted animate-pulse" />
-
-          {/* Document page skeleton */}
-          <div className="w-full max-w-2xl bg-card border border-border rounded-xl p-8 space-y-4 shadow-sm">
-            <div className="h-3 bg-muted rounded animate-pulse w-1/3 mb-6" />
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="space-y-2">
-                <div className="h-3 bg-muted rounded animate-pulse w-full" />
-                <div className="h-3 bg-muted rounded animate-pulse w-11/12" />
-                <div className="h-3 bg-muted rounded animate-pulse w-4/5" />
-              </div>
-            ))}
-            <div className="pt-4 space-y-2">
-              <div className="h-3 bg-muted rounded animate-pulse w-full" />
-              <div className="h-3 bg-muted rounded animate-pulse w-3/4" />
-            </div>
-          </div>
-        </div>
+        <DocumentContentSkeleton />
 
         {/* Fake playback bar */}
         <div className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur px-6 py-4 flex flex-col gap-3">
@@ -192,19 +209,25 @@ const DocumentReader: React.FC = () => {
         }}
       >
         {pdfUrl ? (
-          <div ref={pdfScrollRef} className="overflow-y-auto bg-muted/20 h-full">
-            <div className="max-w-4xl mx-auto px-6 py-6" style={{ paddingBottom: `${OVERLAY_HEIGHT}px` }}>
-              <PDFViewer
-                url={pdfUrl}
-                onDocumentLoaded={() => setPdfLoaded(true)}
-                highlightPage={currentTTSPage}
-                highlightParagraphIdx={currentParagraphIndex}
-                currentWordInParagraph={currentWordIndex}
-                paragraphWordBoundaries={paragraphWordBoundaries}
-                storedPages={storedPages}
-              />
+          <>
+            {!pdfLoaded && <DocumentContentSkeleton />}
+            <div
+              ref={pdfScrollRef}
+              className={`overflow-y-auto bg-muted/20 h-full ${pdfLoaded ? "" : "hidden"}`}
+            >
+              <div className="max-w-4xl mx-auto px-6 py-6" style={{ paddingBottom: `${OVERLAY_HEIGHT}px` }}>
+                <PDFViewer
+                  url={pdfUrl}
+                  onDocumentLoaded={() => setPdfLoaded(true)}
+                  highlightPage={currentTTSPage}
+                  highlightParagraphIdx={currentParagraphIndex}
+                  currentWordInParagraph={currentWordIndex}
+                  paragraphWordBoundaries={paragraphWordBoundaries}
+                  storedPages={storedPages}
+                />
+              </div>
             </div>
-          </div>
+          </>
         ) : text ? (
           <TextReader
             paragraphs={paragraphs}
@@ -221,7 +244,12 @@ const DocumentReader: React.FC = () => {
         )}
       </main>
 
-      <AIActionsSidebar onOpenChange={setAiPanelOpen} userPlan={userPlan} />
+      <AIActionsSidebar
+        onOpenChange={setAiPanelOpen}
+        userPlan={userPlan}
+        documentId={docId}
+        token={token ?? ""}
+      />
 
       <TTSOverlay
         isPlaying={isPlaying}

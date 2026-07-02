@@ -20,6 +20,7 @@ services:
     volumes:
       - ./client:/app
       - /app/node_modules    # keep the container's installed node_modules intact
+      - /app/.next           # Turbopack's persistent cache DB can't open on a bind mount
     ports:
       - "3001:3000"
     depends_on:
@@ -57,6 +58,9 @@ services:
       - RESEND_API_KEY=${RESEND_API_KEY}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3001}
       - KOKORO_URL=${KOKORO_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX=${PINECONE_INDEX:-me-nasoma}
     volumes:
       - ./backend/fastapi:/app
     ports:
@@ -102,6 +106,10 @@ services:
       - REDIS_URL=redis://nasoma-redis:6379
       - RESEND_API_KEY=${RESEND_API_KEY}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3001}
+      - KOKORO_URL=${KOKORO_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX=${PINECONE_INDEX:-me-nasoma}
     volumes:
       - ./backend/fastapi:/app
     depends_on:

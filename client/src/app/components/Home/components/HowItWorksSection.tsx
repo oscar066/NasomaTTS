@@ -30,8 +30,7 @@ const steps = [
 
 export default function HowItWorksSection() {
   return (
-    <section id="how-it-works" className="py-16 bg-secondary/20 relative overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_100%,rgba(139,92,246,0.06),transparent)] pointer-events-none" />
+    <section id="how-it-works" className="py-16 bg-background relative overflow-hidden">
 
       <div className="container mx-auto px-4 relative">
         <FadeIn className="text-center mb-10 max-w-xl mx-auto">

@@ -13,3 +13,12 @@ redis[asyncio]==5.2.1
 resend==2.10.0
 slowapi==0.1.9
 arq==0.26.3
+
+# AI features
+langchain==0.3.30
+langchain-core==0.3.86
+langchain-openai==0.3.35
+langchain-pinecone==0.2.13
+langgraph==0.6.11
+openai==1.109.1
+pinecone==7.3.0

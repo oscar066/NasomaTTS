@@ -51,6 +51,10 @@ class UserManager(BaseUserManager[User, PydanticObjectId]):
     async def on_after_verify(self, user: User, request: Optional[Request] = None):
         logger.info("Email verified for %s", user.email)
 
+    # TODO (payment integration): add on_after_upgrade hook here.
+    # When a user upgrades to Pro, enqueue:
+    #   await pool.enqueue_job("index_user_documents", user_id=str(user.id))
+
     async def on_after_forgot_password(self, user: User, token: str, request: Optional[Request] = None):
         reset_url = f"{settings.frontend_url}/auth/reset-password?token={token}"
         pool = worker_pool.get_pool()

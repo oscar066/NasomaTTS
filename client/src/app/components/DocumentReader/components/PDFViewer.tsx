@@ -600,7 +600,19 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                       renderAnnotationLayer
                       className="shadow-lg"
                       onRenderSuccess={() => {
-                        requestAnimationFrame(() => indexPageWords(i));
+                        requestAnimationFrame(() => {
+                          indexPageWords(i);
+                          // Chromium sometimes finishes pdf.js's canvas draw
+                          // calls without compositing them — the canvas has
+                          // the right pixel data but never paints until some
+                          // unrelated repaint (e.g. a scroll) nudges it. Force
+                          // a paint on this specific canvas immediately.
+                          const canvas = pageRefs.current[i]?.querySelector("canvas");
+                          if (canvas) {
+                            canvas.style.opacity = "0.999";
+                            requestAnimationFrame(() => { canvas.style.opacity = "1"; });
+                          }
+                        });
                       }}
                     />
                   ) : (

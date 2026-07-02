@@ -6,18 +6,6 @@ import FadeIn from "@/app/components/ui/FadeIn";
 export default function CTASection() {
   return (
     <section className="py-24 relative overflow-hidden bg-background">
-      {/* gradient orbs */}
-      <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full bg-primary/15 blur-[120px] pointer-events-none" />
-      <div className="absolute -bottom-32 -right-32 w-[500px] h-[500px] rounded-full bg-purple-500/15 blur-[120px] pointer-events-none" />
-      <div
-        className="absolute inset-0 opacity-30 pointer-events-none"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle, hsl(var(--primary) / 0.12) 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
-        }}
-      />
-
       <div className="container mx-auto px-4 relative text-center">
         <FadeIn>
           <span className="inline-block text-xs font-semibold tracking-widest uppercase text-primary mb-6 bg-primary/10 px-3 py-1.5 rounded-full">

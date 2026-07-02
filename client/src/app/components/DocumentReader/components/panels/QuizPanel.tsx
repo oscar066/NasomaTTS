@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { HelpCircle, Loader2, RefreshCw } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { aiApi } from "@/lib/api";
 
 interface Question {
   question: string;
@@ -11,28 +12,32 @@ interface Question {
   correct: number;
 }
 
-export default function QuizPanel() {
+interface QuizPanelProps {
+  documentId: string;
+  token: string;
+}
+
+export default function QuizPanel({ documentId, token }: QuizPanelProps) {
   const [loading, setLoading]     = useState(false);
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [answers, setAnswers]     = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError]         = useState<string | null>(null);
 
-  const generate = () => {
+  const generate = async () => {
     setLoading(true);
     setQuestions(null);
     setAnswers({});
     setSubmitted(false);
-    // TODO: replace with real AI endpoint call
-    setTimeout(() => {
-      setQuestions([
-        {
-          question: "Quiz generation is coming soon. Which best describes this feature?",
-          options: ["Under construction", "Already live", "Not planned", "Optional"],
-          correct: 0,
-        },
-      ]);
+    setError(null);
+    try {
+      const data = await aiApi.quiz(documentId, token);
+      setQuestions(data.questions);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
       setLoading(false);
-    }, 1200);
+    }
   };
 
   const score = questions?.filter((q, i) => answers[i] === q.correct).length ?? 0;
@@ -41,6 +46,13 @@ export default function QuizPanel() {
     <div className="flex flex-col items-center justify-center h-full gap-3">
       <Loader2 className="h-6 w-6 animate-spin text-primary" />
       <p className="text-sm text-muted-foreground">Generating questions…</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-5">
+      <p className="text-sm text-destructive">{error}</p>
+      <Button variant="outline" onClick={generate}>Try again</Button>
     </div>
   );
 
@@ -55,16 +67,21 @@ export default function QuizPanel() {
           Test your understanding with AI-generated questions from this document.
         </p>
       </div>
-      <Button onClick={generate}>Generate Quiz</Button>
+      <Button
+        onClick={generate}
+        className="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700"
+      >
+        Generate Quiz
+      </Button>
     </div>
   );
 
   return (
     <div className="flex flex-col gap-4 h-full px-5 pb-5 min-h-0">
       <ScrollArea className="flex-1">
-        <div className="flex flex-col gap-5 pr-2">
+        <div className="flex flex-col gap-4 pr-2">
           {questions.map((q, qi) => (
-            <div key={qi} className="flex flex-col gap-2">
+            <div key={qi} className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4">
               <p className="text-sm font-medium text-foreground">{qi + 1}. {q.question}</p>
               <div className="flex flex-col gap-1.5">
                 {q.options.map((opt, oi) => {
@@ -94,7 +111,11 @@ export default function QuizPanel() {
       </ScrollArea>
 
       {!submitted ? (
-        <Button onClick={() => setSubmitted(true)} disabled={Object.keys(answers).length < questions.length}>
+        <Button
+          onClick={() => setSubmitted(true)}
+          disabled={Object.keys(answers).length < questions.length}
+          className="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700"
+        >
           Submit Answers
         </Button>
       ) : (
