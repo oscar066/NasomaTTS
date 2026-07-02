@@ -83,8 +83,7 @@ export default function PricingSection() {
   const [currency, setCurrency] = useState(currencies[0]);
 
   return (
-    <section id="pricing" className="py-16 bg-secondary/20 relative overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_100%,rgba(99,102,241,0.06),transparent)] pointer-events-none" />
+    <section id="pricing" className="py-16 bg-background relative overflow-hidden">
       <div className="container mx-auto px-4 relative">
         <FadeIn className="text-center mb-10">
           <span className="inline-block text-xs font-semibold tracking-widest uppercase text-primary mb-4 bg-primary/10 px-3 py-1.5 rounded-full">

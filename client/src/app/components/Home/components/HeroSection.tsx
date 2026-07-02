@@ -6,29 +6,7 @@ export default function HeroSection() {
   return (
     <section className="relative min-h-[calc(100svh-4rem)] flex flex-col overflow-hidden">
 
-      {/* Mesh gradient background */}
       <div className="absolute inset-0 bg-background z-0" />
-      <div className="absolute -top-32 -right-32 w-[680px] h-[680px] rounded-full bg-primary/20 blur-[120px] z-0 animate-orb-drift" />
-      <div
-        className="absolute top-1/4 -left-48 w-[560px] h-[560px] rounded-full bg-violet-500/20 blur-[120px] z-0 animate-orb-drift"
-        style={{ animationDelay: "2.5s" }}
-      />
-      <div
-        className="absolute bottom-0 right-1/4 w-[500px] h-[500px] rounded-full bg-purple-500/15 blur-[100px] z-0 animate-orb-drift"
-        style={{ animationDelay: "5s" }}
-      />
-      <div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full bg-sky-400/10 blur-[100px] z-0 animate-orb-drift"
-        style={{ animationDelay: "1.5s" }}
-      />
-      <div
-        className="absolute inset-0 z-0 opacity-40"
-        style={{
-          backgroundImage: "radial-gradient(circle, hsl(var(--primary) / 0.15) 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
-        }}
-      />
-      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent z-0" />
 
       {/* Main content */}
       <div className="flex-1 flex items-center relative z-10">

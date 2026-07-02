@@ -48,7 +48,6 @@ function StarRating() {
 export default function TestimonialsSection() {
   return (
     <section id="testimonials" className="py-16 bg-background relative overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(99,102,241,0.06),transparent)] pointer-events-none" />
 
       <div className="container mx-auto px-4 relative">
         <FadeIn className="text-center mb-10 max-w-2xl mx-auto">
