@@ -20,6 +20,7 @@ services:
     volumes:
       - ./client:/app
       - /app/node_modules    # keep the container's installed node_modules intact
+      - /app/.next           # Turbopack's persistent cache DB can't open on a bind mount
     ports:
       - "3001:3000"
     depends_on:
