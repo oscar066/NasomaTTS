@@ -5,6 +5,8 @@ import { Send, Loader2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { aiApi } from "@/lib/api";
+import Markdown from "@/components/Markdown";
 
 interface Message {
   role: "user" | "assistant";
@@ -13,37 +15,62 @@ interface Message {
 
 const INITIAL_MESSAGE: Message = {
   role: "assistant",
-  content:
-    "Hi! Ask me anything about this document — characters, themes, plot points, or anything else you're curious about.",
+  content: "Hi! Ask me anything about this document characters, themes, plot points, or anything else you're curious about.",
 };
 
-export default function ChatPanel() {
+interface ChatPanelProps {
+  documentId: string;
+  token: string;
+}
+
+export default function ChatPanel({ documentId, token }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
   const [input, setInput]       = useState("");
   const [loading, setLoading]   = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [error, setError]       = useState<string | null>(null);
+  const threadIdRef = useRef<string | undefined>(undefined);
+  const bottomRef   = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const send = () => {
+  const send = async () => {
     const text = input.trim();
     if (!text || loading) return;
     setInput("");
+    setError(null);
     setMessages((m) => [...m, { role: "user", content: text }]);
     setLoading(true);
-    // TODO: replace with real AI endpoint call
-    setTimeout(() => {
-      setMessages((m) => [
-        ...m,
-        {
-          role: "assistant",
-          content: "AI chat is coming soon — it will be fully connected to your document context shortly.",
+
+    // Add empty assistant message that we'll stream into
+    setMessages((m) => [...m, { role: "assistant", content: "" }]);
+
+    try {
+      const threadId = await aiApi.chat(
+        documentId,
+        text,
+        token,
+        (token) => {
+          setMessages((m) => {
+            const updated = [...m];
+            updated[updated.length - 1] = {
+              role: "assistant",
+              content: updated[updated.length - 1].content + token,
+            };
+            return updated;
+          });
         },
-      ]);
+        threadIdRef.current,
+      );
+      threadIdRef.current = threadId;
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+      // Remove the empty assistant message on error
+      setMessages((m) => m.slice(0, -1));
+    } finally {
       setLoading(false);
-    }, 900);
+    }
   };
 
   return (
@@ -59,17 +86,21 @@ export default function ChatPanel() {
                     : "bg-muted text-foreground rounded-bl-sm"
                 }`}
               >
-                {msg.content}
+                {msg.content ? (
+                  msg.role === "assistant" ? (
+                    <Markdown content={msg.content} className="text-sm" />
+                  ) : (
+                    msg.content
+                  )
+                ) : loading && i === messages.length - 1 ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : null}
               </div>
             </div>
           ))}
 
-          {loading && (
-            <div className="flex justify-start">
-              <div className="bg-muted rounded-2xl rounded-bl-sm px-3.5 py-2.5">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              </div>
-            </div>
+          {error && (
+            <p className="text-xs text-destructive text-center px-2">{error}</p>
           )}
           <div ref={bottomRef} />
         </div>

@@ -221,7 +221,12 @@ const DocumentReader: React.FC = () => {
         )}
       </main>
 
-      <AIActionsSidebar onOpenChange={setAiPanelOpen} userPlan={userPlan} />
+      <AIActionsSidebar
+        onOpenChange={setAiPanelOpen}
+        userPlan={userPlan}
+        documentId={docId}
+        token={token ?? ""}
+      />
 
       <TTSOverlay
         isPlaying={isPlaying}

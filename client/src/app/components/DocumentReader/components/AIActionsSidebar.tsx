@@ -23,9 +23,11 @@ const ACTIONS: { label: string; icon: React.ElementType; key: ActionKey }[] = [
 interface AIActionsSidebarProps {
   onOpenChange?: (isOpen: boolean) => void;
   userPlan?: string;
+  documentId: string;
+  token: string;
 }
 
-const AIActionsSidebar: React.FC<AIActionsSidebarProps> = ({ onOpenChange, userPlan = "free" }) => {
+const AIActionsSidebar: React.FC<AIActionsSidebarProps> = ({ onOpenChange, userPlan = "free", documentId, token }) => {
   const [open, setOpen] = useState<ActionKey | null>(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const isPro = userPlan === "pro";
@@ -122,10 +124,10 @@ const AIActionsSidebar: React.FC<AIActionsSidebarProps> = ({ onOpenChange, userP
 
               {/* Panel body */}
               <div className="flex-1 overflow-hidden pt-4">
-                {open === "chat"    && <ChatPanel />}
-                {open === "summary" && <SummaryPanel />}
-                {open === "quiz"    && <QuizPanel />}
-                {open === "recap"   && <RecapPanel />}
+                {open === "chat"    && <ChatPanel    documentId={documentId} token={token} />}
+                {open === "summary" && <SummaryPanel documentId={documentId} token={token} />}
+                {open === "quiz"    && <QuizPanel    documentId={documentId} token={token} />}
+                {open === "recap"   && <RecapPanel   documentId={documentId} token={token} />}
               </div>
             </div>
           </DrawerPrimitive.Content>

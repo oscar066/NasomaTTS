@@ -437,6 +437,98 @@ export interface ClassicsResponse {
   results: GutenbergBook[];
 }
 
+// ── AI actions
+
+type StreamCallback = (token: string) => void;
+type RawStreamCallback = (data: unknown) => void;
+
+// Each SSE "data:" line is a JSON-encoded payload (string token, or a structured event
+// like {thread_id}) rather than raw text — this lets tokens safely carry embedded
+// newlines (e.g. paragraph breaks) without corrupting the line-based SSE frame.
+async function streamRequest(
+  path: string,
+  body: object,
+  token: string,
+  onToken: RawStreamCallback,
+): Promise<void> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail ?? "Request failed");
+  }
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      let data: unknown;
+      try {
+        data = JSON.parse(line.slice(6));
+      } catch {
+        continue;
+      }
+      if (data === "[DONE]") return;
+      onToken(data);
+    }
+  }
+}
+
+export const aiApi = {
+  chat: (
+    documentId: string,
+    message: string,
+    token: string,
+    onToken: StreamCallback,
+    threadId?: string,
+  ): Promise<string> => {
+    // Returns the thread_id extracted from the first SSE event
+    return new Promise(async (resolve, reject) => {
+      let resolvedThreadId: string | null = null;
+      try {
+        await streamRequest(
+          "/ai/chat",
+          { document_id: documentId, message, thread_id: threadId ?? null },
+          token,
+          (data) => {
+            // First event is {"thread_id": "..."}, rest are plain string tokens
+            if (!resolvedThreadId && data && typeof data === "object" && "thread_id" in data) {
+              resolvedThreadId = (data as { thread_id: string }).thread_id;
+              return;
+            }
+            onToken(data as string);
+          },
+        );
+        resolve(resolvedThreadId ?? "");
+      } catch (e) {
+        reject(e);
+      }
+    });
+  },
+
+  summary: (documentId: string, token: string, onToken: StreamCallback, force = false) =>
+    streamRequest("/ai/summary", { document_id: documentId, force }, token, (data) => onToken(data as string)),
+
+  recap: (documentId: string, token: string, onToken: StreamCallback) =>
+    streamRequest("/ai/recap", { document_id: documentId }, token, (data) => onToken(data as string)),
+
+  quiz: (documentId: string, token: string) =>
+    request<{ questions: { question: string; options: string[]; correct: number }[] }>(
+      "/ai/quiz",
+      { method: "POST", body: JSON.stringify({ document_id: documentId }) },
+      token,
+    ),
+};
+
 export const classicsApi = {
   browse: (token: string, search = "", page = 1) =>
     request<ClassicsResponse>(
