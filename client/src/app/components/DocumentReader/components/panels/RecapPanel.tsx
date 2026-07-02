@@ -30,7 +30,12 @@ export default function RecapPanel({ documentId, token }: RecapPanelProps) {
           Get caught up on what you've read so far — perfect after a break.
         </p>
       </div>
-      <Button onClick={generate}>Generate Recap</Button>
+      <Button
+        onClick={generate}
+        className="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700"
+      >
+        Generate Recap
+      </Button>
     </div>
   );
 

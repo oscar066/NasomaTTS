@@ -67,7 +67,12 @@ export default function QuizPanel({ documentId, token }: QuizPanelProps) {
           Test your understanding with AI-generated questions from this document.
         </p>
       </div>
-      <Button onClick={generate}>Generate Quiz</Button>
+      <Button
+        onClick={generate}
+        className="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700"
+      >
+        Generate Quiz
+      </Button>
     </div>
   );
 
@@ -106,7 +111,11 @@ export default function QuizPanel({ documentId, token }: QuizPanelProps) {
       </ScrollArea>
 
       {!submitted ? (
-        <Button onClick={() => setSubmitted(true)} disabled={Object.keys(answers).length < questions.length}>
+        <Button
+          onClick={() => setSubmitted(true)}
+          disabled={Object.keys(answers).length < questions.length}
+          className="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700"
+        >
           Submit Answers
         </Button>
       ) : (

@@ -30,7 +30,12 @@ export default function SummaryPanel({ documentId, token }: SummaryPanelProps) {
           Get a concise overview of this document's key points and themes.
         </p>
       </div>
-      <Button onClick={() => generate()}>Generate Summary</Button>
+      <Button
+        onClick={() => generate()}
+        className="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700"
+      >
+        Generate Summary
+      </Button>
     </div>
   );
 

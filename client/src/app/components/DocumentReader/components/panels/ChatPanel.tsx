@@ -116,7 +116,12 @@ export default function ChatPanel({ documentId, token }: ChatPanelProps) {
             if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
           }}
         />
-        <Button size="icon" onClick={send} disabled={!input.trim() || loading} className="flex-shrink-0">
+        <Button
+          size="icon"
+          onClick={send}
+          disabled={!input.trim() || loading}
+          className="flex-shrink-0 bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700"
+        >
           <Send className="h-4 w-4" />
         </Button>
       </div>
